@@ -3,7 +3,7 @@ import path from 'path';
 
 const CSV_URL =
   'https://docs.google.com/spreadsheets/d/1uoBMtTAW-EFEKtK6Zw--_sAojGop0Eco5JCijkVs5ks/export?format=csv&gid=0';
-const OUTPUT_PATH = path.resolve('public/meals.json');
+const OUTPUT_PATH = path.resolve('data/meals.json');
 
 async function loadMealData() {
   const res = await fetch(CSV_URL);

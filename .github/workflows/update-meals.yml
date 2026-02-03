@@ -1,9 +1,9 @@
 name: Update meals
 
-on:
-  # schedule:
-  #   - cron: '0 15 * * 0'
+permissions:
+  contents: write
 
+on:
   workflow_dispatch:
 
 jobs:
