@@ -1,0 +1,12 @@
+{
+  "name": "과낙밥",
+  "start_url": "./",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "images/icon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
