@@ -12,9 +12,9 @@ class TodayMenuRenderer {
 
     this.teamColorMap = {};
     this.mealLabelMap = {
-      morning: '조식',
-      afternoon: '중식',
-      evening: '석식'
+      morning: '☀️ 조식',
+      afternoon: '🍚 중식',
+      evening: '🌙 석식'
     };
   }
 
