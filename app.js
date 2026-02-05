@@ -115,22 +115,33 @@ class TodayMenuRenderer {
     return ['①', '②', '③'][n - 1] || n;
   }
 
+  // ✅ safe-area + Android 대응 resizeSections
   resizeSections() {
-    const h = document.documentElement.clientHeight;
+    const style = getComputedStyle(document.documentElement);
+
+    const topInset = parseInt(style.getPropertyValue('padding-top')) || 0;
+    const bottomInset = parseInt(style.getPropertyValue('padding-bottom')) || 0;
+
+    const h = window.innerHeight - topInset - bottomInset;
+
     document.querySelectorAll('#today-menu section')
       .forEach(s => s.style.height = h + 'px');
-    moveTo(index, false);
+
+    moveTo(index, !isAndroid);
   }
 }
 
+// ------------------- 글로벌 / 스크롤 관련 -------------------
 function getSections() {
   return document.querySelectorAll('#today-menu section');
 }
 
+const isAndroid = /Android/i.test(navigator.userAgent);
+
 function moveTo(i, smooth = true) {
-  const h = document.documentElement.clientHeight;
-  document.documentElement.style.scrollBehavior = smooth ? 'smooth' : 'auto';
-  window.scrollTo(0, i * h);
+  const h = window.innerHeight;
+  document.documentElement.style.scrollBehavior = smooth && !isAndroid ? 'smooth' : 'auto';
+  window.scrollTo(0, Math.round(i * h));
 }
 
 function getStartIndexByTime() {
@@ -180,28 +191,29 @@ function handleScroll(deltaY) {
     moveTo(index);
     if (index === last) {
       isJumping = true;
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         index = 1;
         moveTo(index, false);
         isJumping = false;
-      }, SCROLL_DELAY);
+      });
     }
   } else {
     index--;
     moveTo(index);
     if (index === 0) {
       isJumping = true;
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         index = last - 1;
         moveTo(index, false);
         isJumping = false;
-      }, SCROLL_DELAY);
+      });
     }
   }
 
   setTimeout(() => isScrolling = false, SCROLL_DELAY);
 }
 
+// ------------------- 앱 버전 체크 -------------------
 async function checkAppVersion() {
   try {
     const res = await fetch('data/version.json', { cache: 'no-store' });
@@ -218,6 +230,7 @@ async function checkAppVersion() {
   }
 }
 
+// ------------------- 초기화 -------------------
 window.addEventListener('load', async () => {
   const renderer = new TodayMenuRenderer('today-menu');
   await renderer.init();

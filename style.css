@@ -4,7 +4,7 @@ html, body {
   height: 100%;
   scrollbar-width: none; 
   -webkit-text-size-adjust: 100%;
-  -webkit-user-select: none; /* iOS Safari */
+  -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
@@ -17,6 +17,10 @@ section {
   justify-content: center;
   align-items: center;
   font-size: 24px;
+
+  height: calc(100svh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 h1 {

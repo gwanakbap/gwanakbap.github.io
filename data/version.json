@@ -1,5 +1,5 @@
 {
-  "version": "v0.1.1-beta",
-  "description": "Beta meal menu table for web and PWA.",
+  "version": "v0.1.2-beta",
+  "description": "Add iOS safe-area support and fix Android infinite scroll in PWA.",
   "build": 1
 }
