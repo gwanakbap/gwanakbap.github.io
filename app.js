@@ -131,6 +131,7 @@ function moveTo(i, smooth = true) {
   const h = document.documentElement.clientHeight;
   document.documentElement.style.scrollBehavior = smooth ? 'smooth' : 'auto';
   window.scrollTo(0, i * h);
+  document.documentElement.style.scrollBehavior = 'smooth'
 }
 
 function getStartIndexByTime() {
