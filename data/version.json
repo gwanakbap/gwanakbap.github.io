@@ -1,5 +1,5 @@
 {
   "version": "v0.1.2-beta",
-  "description": "Beta meal menu table for web and PWA.",
+  "description": "Apply viewport-fit=cover to fix status bar spacing",
   "build": 1
 }

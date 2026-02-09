@@ -1,7 +1,8 @@
 {
   "name": "과낙밥",
   "start_url": "./",
-  "display": "standalone",
+  "display": "fullscreen",
+  "theme_color": "transparent",
   "icons": [
     {
       "src": "images/icon.png",
