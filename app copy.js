@@ -16,8 +16,6 @@ class TodayMenuRenderer {
       afternoon: '🍚 중식',
       evening: '🌙 석식'
     };
-
-    this.slider = null;
   }
 
   async init() {
@@ -41,9 +39,8 @@ class TodayMenuRenderer {
       this.renderComingSoon();
     }
 
-    this.updateSectionHeights();
-    window.addEventListener('resize', () => this.updateSectionHeights());
-    window.addEventListener('orientationchange', () => this.updateSectionHeights());
+    this.resizeSections();
+    window.addEventListener('resize', () => this.resizeSections());
   }
 
   getWeekNumber(day) {
@@ -62,42 +59,41 @@ class TodayMenuRenderer {
 
   renderToday(day) {
     this.root.innerHTML = '';
-    const slider = document.createElement('div');
-    slider.className = 'slider';
-    this.slider = slider;
-
     const { morning, afternoon, evening } = day.meals;
 
-    slider.append(
+    this.root.append(
       this.createSection('evening', day.label, evening, true),
       this.createSection('morning', day.label, morning),
       this.createSection('afternoon', day.label, afternoon),
       this.createSection('evening', day.label, evening),
       this.createSection('morning', day.label, morning, true)
     );
-
-    this.root.append(slider);
   }
 
   renderComingSoon() {
     this.root.innerHTML = '';
+
     const wrap = document.createElement('div');
     wrap.style.cssText = `
       display:flex;
       flex-direction:column;
       justify-content:center;
       align-items:center;
-      height:100vh;
+      height:100svh;
       font-size:24px;
       font-weight:bold;
       background:${this.colorValueMap['초록']};
     `;
+
     const d = new Date();
-    const dayNames = ['일','월','화','수','목','금','토'];
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+
     const h1 = document.createElement('h1');
     h1.textContent = `${dayNames[d.getDay()]}(${d.getMonth()+1}월${d.getDate()}일)`;
+
     const text = document.createElement('div');
     text.textContent = '준비중입니다';
+
     wrap.append(h1, text);
     this.root.append(wrap);
   }
@@ -116,129 +112,133 @@ class TodayMenuRenderer {
   }
 
   toCircle(n) {
-    return ['①','②','③'][n-1] || n;
+    return ['①', '②', '③'][n - 1] || n;
   }
 
-  updateSectionHeights() {
-    const h = window.innerHeight;
-    document.querySelectorAll('#today-menu section').forEach(s => {
-      s.style.height = h + 'px';
-    });
-    if(this.slider) moveTo(index, false);
+  resizeSections() {
+    const h = document.documentElement.clientHeight;
+    document.querySelectorAll('#today-menu section')
+      .forEach(s => s.style.height = h + 'px');
+    moveTo(index, false);
   }
 }
 
-/* ---------------- 슬라이드 제어 ---------------- */
+function getSections() {
+  return document.querySelectorAll('#today-menu section');
+}
+
+function moveTo(i, smooth = true) {
+  const h = document.documentElement.clientHeight;
+  document.documentElement.style.scrollBehavior = smooth ? 'smooth' : 'auto';
+  window.scrollTo(0, i * h);
+  document.documentElement.style.scrollBehavior = 'smooth'
+}
+
+function getStartIndexByTime() {
+  const h = new Date().getHours();
+  if (h < 9) return 1;
+  if (h < 13) return 2;
+  return 3;
+}
+
 let index = 1;
-let isAnimating = false;
-const DELTA_THRESHOLD = 30;
+let isScrolling = false;
+let isJumping = false;
 
-function getSlider() {
-  return document.querySelector('#today-menu .slider');
-}
+const SCROLL_DELAY = 900;
+const DELTA_THRESHOLD = 40;
 
-function moveTo(i, animate = true) {
-  const slider = getSlider();
-  if (!slider) return;
-  slider.style.transition = animate ? 'transform 0.6s cubic-bezier(0.22,0.61,0.36,1)' : 'none';
-  const h = window.innerHeight;
-  slider.style.transform = `translateY(-${i * h}px)`;
-}
+window.addEventListener('wheel', e => {
+  e.preventDefault();
+  handleScroll(e.deltaY);
+}, { passive: false });
 
-function handleMove(direction) {
-  if (isAnimating) return;
-  const sections = document.querySelectorAll('#today-menu section');
-  const last = sections.length - 1;
+let touchStartY = 0;
 
-  isAnimating = true;
-  if(direction === 'down'){
+window.addEventListener('touchstart', e => {
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+window.addEventListener('touchmove', e => {
+  e.preventDefault();
+}, { passive: false });
+
+window.addEventListener('touchend', e => {
+  handleScroll(touchStartY - e.changedTouches[0].clientY);
+});
+
+['gesturestart','gesturechange','gestureend']
+  .forEach(ev => window.addEventListener(ev, e => e.preventDefault()));
+
+function handleScroll(deltaY) {
+  if (isScrolling || isJumping || Math.abs(deltaY) < DELTA_THRESHOLD) return;
+
+  const last = getSections().length - 1;
+  isScrolling = true;
+
+  if (deltaY > 0) {
     index++;
     moveTo(index);
-    if(index === last){
-      setTimeout(()=>{index=1; moveTo(index,false); isAnimating=false;},600);
-      return;
+    if (index === last) {
+      isJumping = true;
+      setTimeout(() => {
+        index = 1;
+        moveTo(index, false);
+        isJumping = false;
+      }, SCROLL_DELAY);
     }
   } else {
     index--;
     moveTo(index);
-    if(index === 0){
-      setTimeout(()=>{index=last-1; moveTo(index,false); isAnimating=false;},600);
-      return;
+    if (index === 0) {
+      isJumping = true;
+      setTimeout(() => {
+        index = last - 1;
+        moveTo(index, false);
+        isJumping = false;
+      }, SCROLL_DELAY);
     }
   }
-  setTimeout(()=>isAnimating=false,600);
+
+  setTimeout(() => isScrolling = false, SCROLL_DELAY);
 }
 
-/* wheel */
-window.addEventListener('wheel', e=>{
-  if(Math.abs(e.deltaY)<DELTA_THRESHOLD) return;
-  handleMove(e.deltaY>0?'down':'up');
-},{passive:true});
-
-/* touch */
-let touchStartY=0;
-window.addEventListener('touchstart', e=>{touchStartY=e.touches[0].clientY},{passive:true});
-window.addEventListener('touchend', e=>{
-  const delta=touchStartY-e.changedTouches[0].clientY;
-  if(Math.abs(delta)<DELTA_THRESHOLD) return;
-  handleMove(delta>0?'down':'up');
-});
-
-/* input focus 대응 (키보드 등장 시 슬라이드 막기) */
-document.querySelectorAll('input, textarea').forEach(el=>{
-  el.addEventListener('focus',()=>{isAnimating=true;});
-  el.addEventListener('blur',()=>{isAnimating=false;});
-});
-
-/* ---------------- checkAppVersion ---------------- */
 async function checkAppVersion() {
   try {
     const res = await fetch('data/version.json', { cache: 'no-store' });
     const { version } = await res.json();
     const old = localStorage.getItem('appVersion');
+
     if (old !== version) {
       localStorage.setItem('appVersion', version);
-      const controller = navigator.serviceWorker.controller;
-      if(controller){
-        controller.postMessage({ action: 'skipWaiting' });
-        setTimeout(()=>location.reload(),1500);
-      } else {
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          navigator.serviceWorker.controller?.postMessage({ action: 'skipWaiting' });
-          setTimeout(()=>location.reload(),1500);
-        });
-      }
+      navigator.serviceWorker?.controller?.postMessage({ action: 'skipWaiting' });
+      setTimeout(() => location.reload(), 1500);
     }
-  } catch (e) { console.error(e); }
+  } catch (e) {
+    console.error(e);
+  }
 }
 
-/* ---------------- init ---------------- */
-window.addEventListener('load', async ()=>{
+window.addEventListener('load', async () => {
   const renderer = new TodayMenuRenderer('today-menu');
   await renderer.init();
-  index = getStartIndexByTime();
-  moveTo(index,false);
 
-  if('serviceWorker' in navigator){
-    try{ await navigator.serviceWorker.register('./sw.js'); }
-    catch(e){ console.error(e); }
+  index = getStartIndexByTime();
+  moveTo(index, false);
+
+  if ('serviceWorker' in navigator) {
+    try { await navigator.serviceWorker.register('./sw.js'); }
+    catch (e) { console.error(e); }
   }
 
   checkAppVersion();
 });
 
-document.addEventListener('visibilitychange', async ()=>{
-  if(document.visibilityState==='visible'){
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible') {
     const renderer = new TodayMenuRenderer('today-menu');
     await renderer.init();
-    moveTo(index,false);
+    moveTo(index, false);
     checkAppVersion();
   }
 });
-
-function getStartIndexByTime() {
-  const h = new Date().getHours();
-  if(h<9) return 1;
-  if(h<13) return 2;
-  return 3;
-}
