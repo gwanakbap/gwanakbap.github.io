@@ -1,5 +1,5 @@
 {
-  "version": "v0.1.2-beta",
-  "description": "Apply viewport-fit=cover to fix status bar spacing",
+  "version": "v0.1.4-beta-test1",
+  "description": "fix: Adjust scroll delay for smoother scroll",
   "build": 1
 }

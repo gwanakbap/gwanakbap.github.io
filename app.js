@@ -145,7 +145,7 @@ let index = 1;
 let isScrolling = false;
 let isJumping = false;
 
-const SCROLL_DELAY = 500;
+const SCROLL_DELAY = 900;
 const DELTA_THRESHOLD = 40;
 
 window.addEventListener('wheel', e => {
