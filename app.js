@@ -184,12 +184,6 @@ window.addEventListener('touchend', e=>{
   handleMove(delta>0?'down':'up');
 });
 
-/* input focus 대응 (키보드 등장 시 슬라이드 막기) */
-document.querySelectorAll('input, textarea').forEach(el=>{
-  el.addEventListener('focus',()=>{isAnimating=true;});
-  el.addEventListener('blur',()=>{isAnimating=false;});
-});
-
 /* ---------------- checkAppVersion ---------------- */
 async function checkAppVersion() {
   try {
