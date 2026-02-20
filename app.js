@@ -56,8 +56,9 @@ class TodayMenuRenderer {
 
   buildTeamColorMap(meta) {
     Object.entries(meta).forEach(([color, team]) => {
-      this.teamColorMap[team] = this.colorValueMap[color] || '#eee';
+      this.teamColorMap[team] = this.colorValueMap[color];
     });
+    this.teamColorMap[4] = this.colorValueMap["초록"];
   }
 
   renderToday(day) {
@@ -116,7 +117,7 @@ class TodayMenuRenderer {
   }
 
   toCircle(n) {
-    return ['①','②','③'][n-1] || n;
+    return ['①','②','③'][n-1] || "";
   }
 
   updateSectionHeights() {
