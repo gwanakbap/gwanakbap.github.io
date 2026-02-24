@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'static-cache-v0.1.4';
+const STATIC_CACHE = 'static-cache-v1.0.0-testv';
 const DATA_CACHE = 'data-cache-v1';
 
 const ASSETS = [
