@@ -228,7 +228,23 @@ window.addEventListener('touchend', e => {
   }
 });
 
-// 실행
+let deferredPrompt;
+const installBtn = document.getElementById('install-btn');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  
+  if(deferredPrompt) installBtn.style.display = 'block';
+});
+
+installBtn.addEventListener('click', async () => {
+  deferredPrompt.prompt();
+  
+  deferredPrompt = null;
+  installBtn.style.display = 'none';
+});
+
 window.addEventListener('load', () => {
   const renderer = new Infinite2DRenderer('today-menu');
   renderer.init();

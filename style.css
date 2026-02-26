@@ -94,3 +94,52 @@ li {
   height: 100vh;
   font-weight: bold;
 }
+
+#install-btn {
+  display: none;
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  
+  min-width: 80vw;
+  padding: 10px;
+  background-color: #007AFF;
+  color: #ffffff;
+  
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  
+  cursor: pointer;
+  z-index: 9999;
+  transition: all 0.3s ease;
+  
+  -webkit-tap-highlight-color: transparent;
+}
+
+#install-btn:hover {
+  background-color: #0056b3;
+  transform: translateX(-50%) translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+#install-btn:active {
+  transform: translateX(-50%) translateY(0);
+  background-color: #004494;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+#install-btn.show {
+  display: block;
+  animation: slideUp 0.5s ease-out;
+}
