@@ -124,7 +124,26 @@ class Infinite2DRenderer {
   }
 
   renderComingSoon() {
-    this.root.innerHTML = '<div class="coming-soon-wrap"><h1>식단 준비 중입니다.</h1></div>';
+    this.root.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.style.cssText = `
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      height:100vh;
+      font-size:24px;
+      font-weight:bold;
+      background:${this.colorValueMap['초록']};
+    `;
+    const d = new Date();
+    const dayNames = ['일','월','화','수','목','금','토'];
+    const h1 = document.createElement('h1');
+    h1.textContent = `${dayNames[d.getDay()]}(${d.getMonth()+1}월${d.getDate()}일)`;
+    const text = document.createElement('div');
+    text.textContent = '식단을 준비중입니다';
+    wrap.append(h1, text);
+    this.root.append(wrap);
   }
 }
 
