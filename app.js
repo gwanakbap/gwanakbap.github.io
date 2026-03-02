@@ -33,15 +33,53 @@ class Infinite2DRenderer {
       const res = await fetch('data/meals.json', { cache: 'no-store' });
       const data = await res.json();
 
+      // ✅ 날짜 확인 로직만 추가
+      const today = new Date();
+      const nowInfo = this.getYearWeek(today);
+
+      const generatedDate = new Date(data.meta.generatedAt);
+      const generatedInfo = this.getYearWeek(generatedDate);
+
+      if (
+        nowInfo.year !== generatedInfo.year ||
+        nowInfo.week !== generatedInfo.week
+      ) {
+        this.renderComingSoon();
+        return;
+      }
+
+      // ✅ 여기 아래는 기존 2D 코드 그대로 유지
       this.buildTeamColorMap(data.meta.teamColor);
       this.renderInfiniteGrid(data.days);
       this.setInitialPosition();
 
       window.addEventListener('resize', () => this.updateSizes());
+
     } catch (err) {
       console.error('데이터 로드 실패:', err);
       this.renderComingSoon();
     }
+  }
+
+  /* ================= ISO WEEK ================= */
+
+  getYearWeek(date) {
+    const d = new Date(Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    ));
+
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+
+    return {
+      year: d.getUTCFullYear(),
+      week: week
+    };
   }
 
   buildTeamColorMap(meta) {
