@@ -9,7 +9,7 @@
   },
   "days": [
     {
-      "label": "월(3월23일)",
+      "label": "월(3월30일)",
       "meals": {
         "morning": {
           "teamNumber": 3,
@@ -45,7 +45,7 @@
       }
     },
     {
-      "label": "화(3월24일)",
+      "label": "화(3월31일)",
       "meals": {
         "morning": {
           "teamNumber": 1,
@@ -81,7 +81,7 @@
       }
     },
     {
-      "label": "수(3월25일)",
+      "label": "수(4월1일)",
       "meals": {
         "morning": {
           "teamNumber": 2,
@@ -117,7 +117,7 @@
       }
     },
     {
-      "label": "목(3월26일)",
+      "label": "목(4월2일)",
       "meals": {
         "morning": {
           "teamNumber": 3,
@@ -152,7 +152,7 @@
       }
     },
     {
-      "label": "금(3월27일)",
+      "label": "금(4월3일)",
       "meals": {
         "morning": {
           "teamNumber": 1,
@@ -183,7 +183,7 @@
       }
     },
     {
-      "label": "토(3월28일)",
+      "label": "토(4월4일)",
       "meals": {
         "morning": {
           "teamNumber": 2,
@@ -214,7 +214,7 @@
       }
     },
     {
-      "label": "일(3월29일)\r",
+      "label": "일(4월5일)\r",
       "meals": {
         "morning": {
           "teamNumber": 3,
