@@ -40,13 +40,13 @@ class Infinite2DRenderer {
       const generatedDate = new Date(data.meta.generatedAt);
       const generatedInfo = this.getYearWeek(generatedDate);
 
-      if (
-        nowInfo.year !== generatedInfo.year ||
-        nowInfo.week !== generatedInfo.week
-      ) {
-        this.renderComingSoon();
-        return;
-      }
+      // if (
+      //   nowInfo.year !== generatedInfo.year ||
+      //   nowInfo.week !== generatedInfo.week
+      // ) {
+      //   this.renderComingSoon();
+      //   return;
+      // }
 
       // ✅ 여기 아래는 기존 2D 코드 그대로 유지
       this.buildTeamColorMap(data.meta.teamColor);
