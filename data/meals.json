@@ -9,7 +9,7 @@
   },
   "days": [
     {
-      "label": "월(4월06일)",
+      "label": "월(4월6일)",
       "meals": {
         "morning": {
           "teamNumber": 1,
@@ -44,7 +44,7 @@
       }
     },
     {
-      "label": "화(4월07일)",
+      "label": "화(4월7일)",
       "meals": {
         "morning": {
           "teamNumber": 2,
@@ -79,7 +79,7 @@
       }
     },
     {
-      "label": "수(4월08일)",
+      "label": "수(4월8일)",
       "meals": {
         "morning": {
           "teamNumber": 3,
@@ -114,7 +114,7 @@
       }
     },
     {
-      "label": "목(4월09일)",
+      "label": "목(4월9일)",
       "meals": {
         "morning": {
           "teamNumber": 1,
