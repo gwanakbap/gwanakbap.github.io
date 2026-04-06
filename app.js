@@ -29,7 +29,7 @@ class Infinite2DRenderer {
   }
 
   async init() {
-    try {
+    // try {
       const res = await fetch('data/meals.json', { cache: 'no-store' });
       const data = await res.json();
 
@@ -55,10 +55,10 @@ class Infinite2DRenderer {
 
       window.addEventListener('resize', () => this.updateSizes());
 
-    } catch (err) {
-      console.error('데이터 로드 실패:', err);
-      this.renderComingSoon();
-    }
+    // } catch (err) {
+    //   console.error('데이터 로드 실패:', err);
+    //   this.renderComingSoon();
+    // }
   }
 
   /* ================= ISO WEEK ================= */
