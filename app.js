@@ -29,7 +29,7 @@ class Infinite2DRenderer {
   }
 
   async init() {
-    // try {
+    try {
       const res = await fetch('data/meals.json', { cache: 'no-store' });
       const data = await res.json();
 
@@ -40,13 +40,13 @@ class Infinite2DRenderer {
       const generatedDate = new Date(data.meta.generatedAt);
       const generatedInfo = this.getYearWeek(generatedDate);
 
-      // if (
-      //   nowInfo.year !== generatedInfo.year ||
-      //   nowInfo.week !== generatedInfo.week
-      // ) {
-      //   this.renderComingSoon();
-      //   return;
-      // }
+      if (
+        nowInfo.year !== generatedInfo.year ||
+        nowInfo.week !== generatedInfo.week
+      ) {
+        this.renderComingSoon();
+        return;
+      }
 
       // ✅ 여기 아래는 기존 2D 코드 그대로 유지
       this.buildTeamColorMap(data.meta.teamColor);
@@ -55,10 +55,10 @@ class Infinite2DRenderer {
 
       window.addEventListener('resize', () => this.updateSizes());
 
-    // } catch (err) {
-    //   console.error('데이터 로드 실패:', err);
-    //   this.renderComingSoon();
-    // }
+    } catch (err) {
+      console.error('데이터 로드 실패:', err);
+      this.renderComingSoon();
+    }
   }
 
   /* ================= ISO WEEK ================= */
