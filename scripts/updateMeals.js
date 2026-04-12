@@ -3,6 +3,7 @@ import path from 'path';
 
 const CSV_URL =
   'https://docs.google.com/spreadsheets/d/1uoBMtTAW-EFEKtK6Zw--_sAojGop0Eco5JCijkVs5ks/export?format=csv&gid=0';
+
 const OUTPUT_PATH = path.resolve('data/meals.json');
 
 async function loadMealData() {
@@ -11,27 +12,11 @@ async function loadMealData() {
 
   const csvText = await res.text();
   const rows = parseCSV(csvText);
-  const days = rows[0].slice(1).filter(Boolean);
-  const rowMap = buildRowMap(rows);
-  const teamColor = extractTeamColor(rows);
-  const week = days.map((label, i) => ({
-    label,
-    meals: {
-      morning: parseCell(rowMap['조식']?.[i + 1]),
-      afternoon: parseCell(rowMap['중식']?.[i + 1]),
-      evening: parseCell(rowMap['석식']?.[i + 1])
-    }
-  }));
 
-  return {
-    meta: {
-      generatedAt: new Date().toISOString(),
-      teamColor
-    },
-    days: week
-  };
+  return transformMenu(rows);
 }
 
+/* ================= CSV ================= */
 function parseCSV(text) {
   const rows = [];
   let row = [];
@@ -66,64 +51,84 @@ function parseCSV(text) {
   return rows;
 }
 
-function buildRowMap(rows) {
-  const rowMap = {};
+/* ================= 핵심 변환 ================= */
+function transformMenu(data) {
+  const clean = (v) => (v || '').replace(/\r/g, '').trim();
 
-  for (const row of rows) {
-    const key = row[0];
-    if (!['조식', '중식', '석식'].includes(key)) continue;
-    rowMap[key] = [null, ...row.slice(1)];
+  const header = data[0].map(clean);
+
+  const colorRow = data[data.length - 2].map(clean);
+  const teamRow = data[data.length - 1].map(clean);
+
+  const teamColor = {};
+
+  for (let i = 1; i < colorRow.length; i++) {
+    const color = clean(colorRow[i]);
+    const team = Number(clean(teamRow[i]));
+
+    if (color && !isNaN(team)) {
+      teamColor[color] = team;
+    }
   }
 
-  return rowMap;
-}
+  const getItems = (col, start, end) => {
+    const items = [];
+    for (let r = start; r <= end; r++) {
+      const v = clean(data[r]?.[col]);
+      if (v) items.push(v);
+    }
+    return items;
+  };
 
-function parseCell(cell) {
-  if (!cell) return null;
+  const getTeam = (rowIndex, col) => {
+    const v = clean(data[rowIndex]?.[col]);
+    return v ? Number(v) : null;
+  };
 
-  const lines = cell
-    .split('\n')
-    .map(v => v.trim())
-    .filter(Boolean);
+  const days = [];
+
+  for (let col = 1; col < header.length; col++) {
+    const label = clean(header[col]);
+    if (!label) continue;
+
+    days.push({
+      label,
+      meals: {
+        morning: {
+          teamNumber: getTeam(6, col),
+          items: getItems(col, 1, 5)
+        },
+        afternoon: {
+          teamNumber: getTeam(12, col),
+          items: getItems(col, 7, 11)
+        },
+        evening: {
+          teamNumber: getTeam(18, col),
+          items: getItems(col, 13, 17)
+        }
+      }
+    });
+  }
 
   return {
-    teamNumber: Number(lines[0]),
-    items: lines.slice(1)
+    meta: {
+      generatedAt: new Date().toISOString(),
+      teamColor
+    },
+    days
   };
 }
 
-function extractTeamColor(rows) {
-  let colorRow, teamRow;
-
-  for (const row of rows) {
-    if (row[0] === '' && row[1]) colorRow = row;
-    if (row[0] === '팀') teamRow = row;
-    if (colorRow && teamRow) break;
-  }
-
-  if (!colorRow || !teamRow) return {};
-
-  const colors = colorRow.slice(1);
-  const numbers = teamRow.slice(1);
-
-  const mapping = {};
-  colors.forEach((color, idx) => {
-    if (color && numbers[idx]) {
-      mapping[color] = Number(numbers[idx]);
-    }
-  });
-
-  return mapping;
-}
-
+/* ================= 실행 ================= */
 (async () => {
   try {
     const data = await loadMealData();
     const json = JSON.stringify(data, null, 2);
 
-    console.log(json)
     await writeFile(OUTPUT_PATH, json, 'utf-8');
+    console.log('✅ meals.json 생성 완료');
   } catch (err) {
+    console.error(err);
     process.exit(1);
   }
 })();
