@@ -30,7 +30,9 @@ class Infinite2DRenderer {
 
   async init() {
     try {
-      const data = await this.loadMealData();
+      const res = await fetch('data/meals.json', { cache: 'no-store' });
+      const data = await res.json();
+      // const data = await this.loadMealData();
 
       // ✅ 날짜 확인 로직만 추가
       const today = new Date();
