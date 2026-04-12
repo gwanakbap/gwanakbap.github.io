@@ -30,8 +30,7 @@ class Infinite2DRenderer {
 
   async init() {
     try {
-      const res = await fetch('data/meals.json', { cache: 'no-store' });
-      const data = await res.json();
+      const data = await this.loadMealData();
 
       // ✅ 날짜 확인 로직만 추가
       const today = new Date();
@@ -59,6 +58,133 @@ class Infinite2DRenderer {
       console.error('데이터 로드 실패:', err);
       this.renderComingSoon();
     }
+  }
+
+  async loadMealData() {
+    const url =
+      'https://docs.google.com/spreadsheets/d/1uoBMtTAW-EFEKtK6Zw--_sAojGop0Eco5JCijkVs5ks/export?format=csv&gid=0';
+
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error('CSV fetch 실패');
+
+    const csvText = await res.text();
+    const rows = this.parseCSV(csvText);
+
+    return this.transformMenu(rows);
+  }
+
+  parseCSV(text) {
+    const rows = [];
+    let row = [];
+    let cell = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      const next = text[i + 1];
+
+      if (char === '"' && next === '"') {
+        cell += '"';
+        i++;
+      } else if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        row.push(cell);
+        cell = '';
+      } else if (char === '\n' && !inQuotes) {
+        row.push(cell);
+        rows.push(row);
+        row = [];
+        cell = '';
+      } else {
+        cell += char;
+      }
+    }
+
+    row.push(cell);
+    rows.push(row);
+
+    return rows;
+  }
+
+  // ✅ 핵심 수정: teamColor 숫자 정리
+  transformMenu(data) {
+    const clean = (v) => (v || "").replace(/\r/g, "").trim();
+
+    const header = data[0].map(clean);
+
+    // =============================
+    // 팀 컬러 / 팀 번호 매핑
+    // =============================
+    const colorRow = data[data.length - 2].map(clean); // ["", "빨강", "노랑", ...]
+    const teamRow  = data[data.length - 1].map(clean); // ["팀", "1", "2", ...]
+
+    const teamColor = {};
+
+    for (let i = 1; i < colorRow.length; i++) {
+      const color = clean(colorRow[i]);
+      const team  = Number(clean(teamRow[i]));
+
+      if (color && !isNaN(team)) {
+        teamColor[color] = team;
+      }
+    }
+
+    // =============================
+    // 공통 유틸
+    // =============================
+    const getItems = (col, start, end) => {
+      const items = [];
+      for (let r = start; r <= end; r++) {
+        const v = clean(data[r]?.[col]);
+        if (v) items.push(v);
+      }
+      return items;
+    };
+
+    const getTeam = (rowIndex, col) => {
+      const v = clean(data[rowIndex]?.[col]);
+      return v ? Number(v) : null;
+    };
+
+    // =============================
+    // days 생성
+    // =============================
+    const days = [];
+
+    for (let col = 1; col < header.length; col++) {
+      const label = clean(header[col]);
+      if (!label) continue;
+
+      days.push({
+        label,
+        meals: {
+          morning: {
+            teamNumber: getTeam(6, col),
+            items: getItems(col, 1, 5)
+          },
+          afternoon: {
+            teamNumber: getTeam(12, col),
+            items: getItems(col, 7, 11)
+          },
+          evening: {
+            teamNumber: getTeam(18, col),
+            items: getItems(col, 13, 17)
+          }
+        }
+      });
+    }
+
+    // =============================
+    // 최종 리턴
+    // =============================
+    return {
+      meta: {
+        generatedAt: new Date().toISOString(),
+        teamColor
+      },
+      days
+    };
   }
 
   /* ================= ISO WEEK ================= */
