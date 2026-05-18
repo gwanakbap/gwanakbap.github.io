@@ -137,10 +137,20 @@ class Infinite2DRenderer {
     // =============================
     const getItems = (col, start, end) => {
       const items = [];
+
       for (let r = start; r <= end; r++) {
         const v = clean(data[r]?.[col]);
-        if (v) items.push(v);
+
+        if (!v) continue;
+
+        const splitItems = v
+          .split('\n')
+          .map((item) => item.trim())
+          .filter(Boolean);
+
+        items.push(...splitItems);
       }
+
       return items;
     };
 

@@ -75,7 +75,13 @@ function transformMenu(data) {
     const items = [];
     for (let r = start; r <= end; r++) {
       const v = clean(data[r]?.[col]);
-      if (v) items.push(v);
+      if (v) {
+        const lines = v.split('\n')
+                       .map(item => item.trim())
+                       .filter(item => item !== '');
+        
+        items.push(...lines);
+      }
     }
     return items;
   };
