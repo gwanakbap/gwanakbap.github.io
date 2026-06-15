@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-06-15T00:38:52.587Z",
+    "generatedAt": "2026-06-15T00:40:25.750Z",
     "teamColor": {
       "빨강": 1,
       "노랑": 2,
@@ -32,7 +32,7 @@
           ]
         },
         "evening": {
-          "teamNumber": 2,
+          "teamNumber": 3,
           "items": [
             "콩나물냉국",
             "안동찜닭",
@@ -67,7 +67,7 @@
           ]
         },
         "evening": {
-          "teamNumber": 3,
+          "teamNumber": 1,
           "items": [
             "북어국",
             "제육볶음",
@@ -101,7 +101,7 @@
           ]
         },
         "evening": {
-          "teamNumber": 1,
+          "teamNumber": 2,
           "items": [
             "콩나물냉국",
             "안동찜닭",
@@ -136,7 +136,7 @@
           ]
         },
         "evening": {
-          "teamNumber": 2,
+          "teamNumber": 3,
           "items": [
             "추어탕",
             "치즈계란말이",
@@ -167,7 +167,7 @@
           ]
         },
         "evening": {
-          "teamNumber": 3,
+          "teamNumber": 1,
           "items": [
             "추어탕",
             "치즈계란말이",
@@ -198,7 +198,7 @@
           ]
         },
         "evening": {
-          "teamNumber": 1,
+          "teamNumber": 2,
           "items": [
             "감자옹심이국",
             "가자미구이",
@@ -230,7 +230,7 @@
           ]
         },
         "evening": {
-          "teamNumber": 2,
+          "teamNumber": 3,
           "items": [
             "홍합살미역국",
             "쇠고기장조림",
