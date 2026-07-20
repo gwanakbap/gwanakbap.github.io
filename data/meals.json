@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-07-12T23:56:29.308Z",
+    "generatedAt": "2026-07-20T07:16:23.666Z",
     "teamColor": {
       "빨강": 1,
       "노랑": 2,
@@ -9,7 +9,7 @@
   },
   "days": [
     {
-      "label": "월(7월13일)",
+      "label": "월(7월20일)",
       "meals": {
         "morning": {
           "teamNumber": 3,
@@ -45,7 +45,7 @@
       }
     },
     {
-      "label": "화(7월14일)",
+      "label": "화(7월21일)",
       "meals": {
         "morning": {
           "teamNumber": 3,
@@ -82,7 +82,7 @@
       }
     },
     {
-      "label": "수(7월15일)",
+      "label": "수(7월22일)",
       "meals": {
         "morning": {
           "teamNumber": 2,
@@ -118,7 +118,7 @@
       }
     },
     {
-      "label": "목(7월16일)",
+      "label": "목(7월23일)",
       "meals": {
         "morning": {
           "teamNumber": 3,
@@ -154,7 +154,7 @@
       }
     },
     {
-      "label": "금(7월17일)",
+      "label": "금(7월24일)",
       "meals": {
         "morning": {
           "teamNumber": 1,
@@ -186,7 +186,7 @@
       }
     },
     {
-      "label": "토(7월18일)",
+      "label": "토(7월25일)",
       "meals": {
         "morning": {
           "teamNumber": 2,
@@ -219,7 +219,7 @@
       }
     },
     {
-      "label": "일(7월19일)",
+      "label": "일(7월26일)",
       "meals": {
         "morning": {
           "teamNumber": 3,
