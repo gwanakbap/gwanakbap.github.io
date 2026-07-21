@@ -1,3 +1,6 @@
+/* ==========================================================================
+   기본 및 초기화 스타일
+   ========================================================================== */
 html, body {
   margin: 0;
   padding: 0;
@@ -16,23 +19,45 @@ html, body {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
+  transition: opacity 0.2s ease;
 }
 
-.slider-2d {
+/* 요일 내비바는 제거하셨으므로 관련 스타일은 생략되거나 비활성화됩니다 */
+
+
+/* ==========================================
+   1. 기존 2D 모드 전용 레이아웃
+   ========================================== */
+.slider-2d:not(.conveyor-mode) {
   display: flex;
   flex-direction: row;
   height: 100%;
   will-change: transform;
 }
 
-.day-column {
+.slider-2d:not(.conveyor-mode) .day-column {
   display: flex;
   flex-direction: column;
   width: 100vw;
   flex-shrink: 0;
+  position: relative;
 }
 
-.meal-section {
+.slider-2d:not(.conveyor-mode) .column-header-day {
+  position: absolute;
+  top: calc(20px + env(safe-area-inset-top, 0px)); /* 내비바가 없으므로 상단 여백을 대폭 줄임 */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  font-size: 32px;
+  font-weight: bold;
+  color: #2c2c2c;
+  margin: 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+.slider-2d:not(.conveyor-mode) .meal-section {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -42,14 +67,165 @@ html, body {
   flex-shrink: 0;
   box-sizing: border-box;
   position: relative;
-  padding: 20px;
-  cursor: grab; /* 잡을 수 있는 손모양 */
+  padding: calc(60px + env(safe-area-inset-top, 0px)) 20px 20px 20px;
+  cursor: grab;
 }
 
-.meal-section:active {
-  cursor: grabbing; /* 잡고 있는 손모양 */
+.slider-2d:not(.conveyor-mode) .meal-section:active {
+  cursor: grabbing;
 }
 
+
+/* ==========================================
+   2. [핵심 수정] 컨베이어 카드 모드 전용 레이아웃
+   ========================================== */
+.slider-2d.conveyor-mode {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  height: 100%;
+  width: max-content;
+  will-change: transform;
+
+  padding: 0 10px; 
+  box-sizing: border-box;
+}
+
+.slider-2d.conveyor-mode .day-column {
+  width: 160px;            
+  height: 100%; /* 기둥 높이를 화면 전체로 확장 */
+  margin: 0 10px 0 0;          
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* 카드들을 화면 세로 중앙에 모아줌 */
+  gap: 12px; /* 카드 사이의 수직 간격 최소화 */
+  flex-shrink: 0;
+}
+
+.slider-2d.conveyor-mode .day-column:last-child {
+  margin-right: 0;
+}
+
+/* 컨베이어 모드일 때 기둥 요일 헤더 */
+.slider-2d.conveyor-mode .column-header-day {
+  font-size: 20px;         
+  font-weight: bold;
+  color: #2c2c2c;
+  margin-top: calc(10px + env(safe-area-inset-top, 0px)); /* 상단 안전영역만 최소한으로 확보 */
+  margin-bottom: 8px;     
+  text-align: center;
+}
+
+.slider-2d.conveyor-mode .meal-section {
+  width: 100%;
+  /* 💡 화면 세로 비율에 맞춰 카드 높이를 꽉 차게 자동 계산 (상하 불필요한 여백 대폭 제거) */
+  height: calc((100vh - 100px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) / 3);
+  max-height: 240px; /* 너무 길어지는 것 방지 */
+  min-height: 160px; /* 너무 쪼그라드는 것 방지 */
+  
+  border-radius: 16px;     
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  justify-content: center; 
+  align-items: center;     
+  padding: 40px 0px 25px 0px; /* 상하단 내부 여백을 줄여 글자 영역 최대 확보 */
+  box-sizing: border-box;
+  cursor: grab;
+  position: relative; 
+}
+
+.slider-2d.conveyor-mode .meal-section:active {
+  cursor: grabbing;
+}
+
+/* 카드 내부 컨텐츠 컨테이너 */
+.slider-2d.conveyor-mode .menu-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+/* 조식/중식/석식 상단 고정 */
+.slider-2d.conveyor-mode h2.meal-type { 
+  position: absolute;
+  top: 12px; /* 카드 상단 바짝 밀착 */
+  left: 44%;
+  transform: translateX(-50%);
+  width: 100%;
+  
+  display: flex;
+  justify-content: center; 
+  align-items: center;
+  gap: 6px; 
+  font-size: 16px; 
+  margin: 0;
+  font-weight: normal; /* 얇은 두께 유지 */
+}
+
+/* 카드 모드 식단 목록 */
+.slider-2d.conveyor-mode ul { 
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  overflow: hidden; /* 영역을 벗어나는 글자 방지 */
+}
+
+.slider-2d.conveyor-mode li { 
+  font-size: 14px; 
+  margin: 2px 0; 
+  text-align: center;
+  width: 100%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+
+/* ==========================================
+   📱 초소형 기기 대응 (세로 680px 이하)
+   ========================================== */
+@media (max-height: 680px) {
+  .slider-2d.conveyor-mode .day-column {
+    gap: 8px; /* 카드 사이 간격 더 좁게 */
+  }
+  .slider-2d.conveyor-mode .column-header-day {
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+  .slider-2d.conveyor-mode .meal-section {
+    padding-top: 30px;
+    padding-bottom: 20px;
+  }
+  .slider-2d.conveyor-mode h2.meal-type {
+    top: 8px;
+    font-size: 14px;
+  }
+  .slider-2d.conveyor-mode li {
+    font-size: 12px;
+    margin: 1px 0;
+  }
+  .slider-2d.conveyor-mode .team-number {
+    right: 8px;
+    bottom: 6px;
+    font-size: 12px;
+  }
+}
+
+
+/* ==========================================
+   3. 공통 요소 타이포그래피 및 UI
+   ========================================== */
 .menu-content {
   text-align: center;
   width: 100%;
@@ -58,12 +234,15 @@ html, body {
 
 h1 { 
   font-size: 40px; 
-  margin-bottom: 40px; 
+  margin-top: 0;
+  margin-bottom: 40px;
 }
 
 h2.meal-type { 
   font-size: 24px; 
   font-weight: normal; 
+  margin-top: 0;
+  margin-left: -35px;
   margin-bottom: 30px;
 }
 
@@ -81,8 +260,24 @@ li {
   word-break: keep-all;
 }
 
-.team-number {
+/* [숫자기호 분기 스타일 설정] */
+
+/* 1) 2D 모드일 때 */
+.slider-2d:not(.conveyor-mode) .team-number {
   font-size: 25px;
+  text-align: center;
+  margin-top: 10px;
+}
+
+/* 2) 컨베이어 카드 모드일 때: 개별 카드 우측 하단 고정 */
+.slider-2d.conveyor-mode .team-number {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  font-size: 16px;
+  font-weight: bold;
+  opacity: 0.85;
+  pointer-events: none; 
 }
 
 .coming-soon-wrap {
