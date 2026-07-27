@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>과낙ON</title>
+    <link rel="icon" href="gwanakonIcon.png" />
+    <link rel="manifest" href="/manifest.json">
+    <style>
+        :root {
+            --primary-color: #e53935;
+            --bg-color: #f4f6f8;
+            --text-main: #333;
+            --text-sub: #666;
+            --card-bg: #ffffff;
+            --blue: rgb(172, 190, 227);
+            --nav-height: 56px;
+            --header-height: 52px;
+            --shift-badge-bg: #F5C7AA; /* 일직/숙직 전용 지정색 */
+        }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none;
+        }
+        body {
+            background-color: #d1d5db;
+            display: flex;
+            justify-content: center;
+        }
+        #app-container {
+            width: 100%;
+            max-width: 400px;
+            height: 100vh;
+            background-color: var(--bg-color);
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        header {
+            background-color: var(--blue);
+            padding: 0 16px;
+
+            font-size: 18px;
+            font-weight: 800; /* 조금 더 또렷하고 두껍게 */
+            color: #1e293b;   /* 배경(파란색) 대비 가독성이 좋은 짙은 슬레이트 컬러 */
+            letter-spacing: -0.5px; /* 한글 가독성을 최적화하는 좁은 자간 */
+
+            display: flex;
+            align-items: center;
+            height: var(--header-height);
+            z-index: 10;
+            flex-shrink: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .swipe-viewport {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+            width: 100%;
+            touch-action: pan-y;
+            cursor: grab;
+        }
+        .swipe-viewport:active { cursor: grabbing; }
+        .swipe-track {
+            display: flex;
+            width: 300%;
+            height: 100%;
+            transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+            will-change: transform;
+        }
+        .swipe-track.dragging { transition: none; }
+        
+        .view-page {
+            width: 33.3333%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 12px;
+            padding-bottom: calc(var(--nav-height) + 10px);
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .view-page.calendar-page {
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 12px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.04);
+        }
+        
+        .calendar-card {
+            padding: 10px 6px;
+            margin-bottom: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        .calendar-nav {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 8px;
+            flex-shrink: 0;
+        }
+        .cal-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 1px;
+            background-color: #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #e2e8f0;
+            flex: 1;
+        }
+        .day-header {
+            background-color: #f8fafc;
+            text-align: center;
+            padding: 4px 0;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-sub);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .day-header.sun { color: #e53935; }
+        .day-header.sat { color: #2563eb; }
+        
+        .day-cell {
+            background-color: #ffffff;
+            padding: 2px 2px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            cursor: pointer;
+            overflow: hidden;
+            height: 100%;
+        }
+        .day-cell.other-month { background-color: #f8fafc; opacity: 0.35; }
+        .day-num {
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--text-main);
+            line-height: 1.1;
+            margin-bottom: 2px;
+        }
+        .day-cell.sun .day-num { color: #e53935; }
+        .day-cell.sat .day-num { color: #2563eb; }
+        .day-cell.today { background-color: #f0f7ff; }
+        .day-cell.today .day-num {
+            background-color: #2563eb;
+            color: #ffffff !important;
+            border-radius: 50%;
+            width: 14px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8.5px;
+        }
+
+        .duty-list {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5px;
+            overflow: hidden;
+        }
+        .duty-badge {
+            font-size: 8px;
+            font-weight: 600;
+            padding: 0.5px 1px;
+            border-radius: 2px;
+            text-align: center;
+            background-color: #f1f5f9;
+            color: #334155;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            line-height: 1.15;
+            letter-spacing: -0.3px;
+        }
+        /* [일직], [숙직] 배지에만 지정색 적용 */
+        .duty-badge.shift-day,
+        .duty-badge.shift-night {
+            background-color: var(--shift-badge-bg);
+            font-weight: 700;
+            color: #333333;
+            font-size: 7.5px;
+        }
+        .duty-badge.my-duty {
+            background-color: #ffe4e6;
+            color: var(--primary-color);
+            font-weight: 800;
+            border: 0.5px solid #fecdd3;
+        }
+
+        .date-nav-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .date-btn {
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-sub);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+            transition: all 0.15s ease;
+        }
+        .date-btn:active {
+            background-color: #e2e8f0;
+            transform: scale(0.95);
+        }
+        .greeting {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .greeting span.holiday { color: var(--primary-color); font-size: 13px; }
+        .greeting span.today-tag {
+            background-color: #eff6ff;
+            color: #2563eb;
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            border: 1px solid #bfdbfe;
+            font-weight: 600;
+        }
+
+        .card-title {
+            font-size: 13px;
+            color: var(--text-sub);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .card-title span { color: var(--primary-color); font-weight: 700; }
+        .duty-info { display: flex; justify-content: space-between; align-items: center; }
+        .duty-date { font-size: 20px; font-weight: 800; color: var(--text-main); }
+        .d-day {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 16px;
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .shift-section {
+            background-color: #f8fafc;
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .shift-section:last-child { margin-bottom: 0; }
+        .shift-header { display: flex; align-items: center; margin-bottom: 6px; }
+        
+        /* 기본 배지 스타일 (일반 '당직' 등) */
+        .shift-badge {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 5px;
+            color: #334155;
+            background-color: #e2e8f0; /* 일반 기본 배경색 */
+        }
+        /* 일직/숙직에만 #F5C7AA 배경색 지정 */
+        .shift-badge.day,
+        .shift-badge.night {
+            background-color: var(--shift-badge-bg);
+            color: #333333;
+        }
+
+        .duty-row { display: flex; margin-bottom: 5px; align-items: flex-start; }
+        .duty-row:last-child { margin-bottom: 0; }
+        .duty-role { width: 80px; color: var(--text-sub); font-size: 13px; font-weight: 600; flex-shrink: 0; }
+        .duty-name { color: var(--text-main); font-size: 13.5px; font-weight: 700; line-height: 1.35; }
+        .duty-name .rank { font-size: 11.5px; color: #666; font-weight: normal; margin-left: 2px; }
+
+        .setting-item {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid #eee;
+        }
+        .setting-item:last-child { border-bottom: none; }
+        .setting-group { flex-direction: column; align-items: stretch; gap: 6px; }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; width: 100%; }
+        .setting-notice { font-size: 11px; color: var(--text-sub); line-height: 1.35; margin-top: 2px; }
+        .setting-input {
+            border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 10px;
+            font-size: 14px; font-weight: 700; color: var(--text-main); text-align: right; outline: none; width: 110px;
+        }
+        .setting-input:focus { border-color: var(--primary-color); }
+        .toggle-switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-switch .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #e5e7eb; transition: 0.3s; border-radius: 24px;
+        }
+        .toggle-switch .slider:before {
+            position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+            background-color: white; transition: 0.3s; border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+        .toggle-switch input:checked + .slider { background-color: var(--primary-color); }
+        .toggle-switch input:checked + .slider:before { transform: translateX(20px); }
+
+        .bottom-nav {
+            position: absolute; bottom: 0; left: 0; width: 100%; height: var(--nav-height);
+            background-color: #ffffff; display: flex; border-top: 1px solid #e5e7eb; z-index: 10;
+        }
+        .nav-item {
+            flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            background: none; border: none; color: #888; font-size: 11px; font-weight: 600; cursor: pointer; gap: 3px;
+            transition: background-color 0.15s ease, transform 0.1s ease;
+            -webkit-tap-highlight-color: transparent;
+            margin: 4px;
+            border-radius: 10px;
+        }
+        .nav-item .icon { font-size: 17px; }
+        .nav-item.active { color: var(--primary-color); }
+        .nav-item:active {
+            background-color: rgba(0, 0, 0, 0.08);
+            transform: scale(0.95);
+        }
+
+        .input-with-btn { display: flex; gap: 6px; align-items: center; }
+        .btn-save {
+            background-color: var(--primary-color); color: white; border: none; border-radius: 8px;
+            padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+        }
+        .feedback-msg { font-size: 12px; font-weight: 700; color: #16a34a; margin-top: 4px; display: none; align-items: center; }
+        .feedback-msg.show { display: flex; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <header id="app-header">당직상황근무지정</header>
+
+    <div class="swipe-viewport" id="viewport">
+        <div class="swipe-track" id="track">
+            
+            <!-- 페이지 0: 달력 -->
+            <section class="view-page calendar-page">
+                <div class="card calendar-card">
+                    <div class="calendar-nav">
+                        <h2 class="cal-title" id="calendar-title">달력</h2>
+                    </div>
+                    <div class="calendar-grid" id="calendar-grid"></div>
+                </div>
+            </section>
+
+            <!-- 페이지 1: 근무 카드 -->
+            <section class="view-page">
+                <div class="card" id="today-card"></div>
+
+                <div class="card next-duty">
+                    <div class="card-title">다음 <span id="my-name-display"></span> 님의 당직</div>
+                    <div class="duty-info">
+                        <div class="duty-date" id="next-duty-date">-</div>
+                        <div class="d-day" id="next-d-day">D--</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 페이지 2: 설정 -->
+            <section class="view-page">
+                <div class="card">        
+                    <div class="setting-item setting-group">
+                        <div class="setting-row">
+                            <span>사용자 이름</span>
+                            <div class="input-with-btn">
+                                <input type="text" id="username-input" class="setting-input" value="" placeholder="이름 입력">
+                                <button type="button" id="btn-save-username" class="btn-save">저장</button>
+                            </div>
+                        </div>
+                        <p class="setting-notice">※ 이름을 설정하시면 캘린더 강조 및 다음 당직 안내 대상에 포함됩니다.</p>
+                        <div id="save-feedback" class="feedback-msg">✓ 저장되었습니다.</div>
+                    </div>
+<!-- 
+                    <div class="setting-item">
+                        <span>하루 전 당직 알림 받기</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="notification-toggle">
+                            <span class="slider"></span>
+                        </label>
+                    </div>  -->
+
+                </div>
+            </section>
+
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <button class="nav-item" id="nav-btn-0"><span class="icon">📆</span><span>달력</span></button>
+        <button class="nav-item active" id="nav-btn-1"><span class="icon">🚨</span><span>근무</span></button>
+        <button class="nav-item" id="nav-btn-2"><span class="icon">⚙️</span><span>설정</span></button>
+    </nav>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyDvEGZcUtz8PIyOLg9M_v71dL7aQG1ntwk",
+      authDomain: "gwanak-on.firebaseapp.com",
+      databaseURL: "https://gwanak-on-default-rtdb.firebaseio.com",
+      projectId: "gwanak-on",
+      storageBucket: "gwanak-on.firebasestorage.app",
+      messagingSenderId: "101226390647",
+      appId: "1:101226390647:web:67c72a62b3079c16e4d272"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    let messaging = null;
+
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').then((registration) => {
+            console.log('PWA Service Worker 등록 성공:', registration.scope);
+            try {
+                messaging = getMessaging(app);
+            } catch (e) {
+                console.warn('FCM Messaging을 초기화할 수 없습니다.');
+            }
+        });
+    }
+
+    let dutyData = [];
+    let currentUsername = localStorage.getItem('duty_app_username') || "";
+
+    const now = new Date();
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth() + 1;
+    const todayDay = now.getDate();
+    const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+
+    let selectedDay = todayDay;
+    document.getElementById('calendar-title').innerText = `${todayYear}년 ${todayMonth}월`;
+
+    const track = document.getElementById('track');
+    const viewport = document.getElementById('viewport');
+    const navItems = document.querySelectorAll('.nav-item');
+    const usernameInput = document.getElementById('username-input');
+    const btnSaveUsername = document.getElementById('btn-save-username');
+    const notificationToggle = document.getElementById('notification-toggle');
+
+    usernameInput.value = currentUsername;
+
+    document.getElementById('nav-btn-0').addEventListener('click', () => goToPage(0));
+    document.getElementById('nav-btn-1').addEventListener('click', () => goToPage(1));
+    document.getElementById('nav-btn-2').addEventListener('click', () => goToPage(2));
+    btnSaveUsername.addEventListener('click', saveUsername);
+
+   if (notificationToggle) {
+        notificationToggle.addEventListener('change', async (e) => {
+            if (e.target.checked) {
+                await requestNotificationPermission();
+            } else {
+                localStorage.setItem('duty_notification_enabled', 'false');
+            }
+        });
+
+        if (Notification.permission === 'granted' && localStorage.getItem('duty_notification_enabled') === 'true') {
+            notificationToggle.checked = true;
+        }
+    }
+
+    let currentIndex = 1;
+    const totalPages = 3;
+
+    function goToPage(index) {
+        if (index < 0 || index >= totalPages) return;
+        currentIndex = index;
+        const translateVal = -currentIndex * viewport.offsetWidth;
+        track.classList.remove('dragging');
+        track.style.transform = `translateX(${translateVal}px)`;
+        navItems.forEach((item, idx) => item.classList.toggle('active', idx === currentIndex));
+    }
+
+    let startX = 0, startY = 0, currentTranslate = 0, prevTranslate = 0, isDragging = false, isHorizontalSwipe = null;
+
+    function getPositionX(e) { return e.type.includes('mouse') ? e.clientX : e.touches[0].clientX; }
+    function getPositionY(e) { return e.type.includes('mouse') ? e.clientY : e.touches[0].clientY; }
+
+    function touchStart(e) {
+        isDragging = true;
+        isHorizontalSwipe = null;
+        startX = getPositionX(e);
+        startY = getPositionY(e);
+        prevTranslate = -currentIndex * viewport.offsetWidth;
+        track.classList.add('dragging');
+    }
+
+    function touchMove(e) {
+        if (!isDragging) return;
+        const currentX = getPositionX(e);
+        const currentY = getPositionY(e);
+        const diffX = currentX - startX;
+        const diffY = currentY - startY;
+
+        if (isHorizontalSwipe === null) {
+            if (Math.abs(diffX) > 8 || Math.abs(diffY) > 8) {
+                isHorizontalSwipe = Math.abs(diffX) > Math.abs(diffY);
+            }
+        }
+
+        if (isHorizontalSwipe === true) {
+            if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
+            let moveAmount = diffX;
+            if ((currentIndex === 0 && diffX > 0) || (currentIndex === totalPages - 1 && diffX < 0)) {
+                moveAmount = diffX * 0.3;
+            }
+            currentTranslate = prevTranslate + moveAmount;
+            track.style.transform = `translateX(${currentTranslate}px)`;
+        }
+    }
+
+    function touchEnd() {
+        if (!isDragging) return;
+        isDragging = false;
+        if (isHorizontalSwipe === true) {
+            const movedBy = currentTranslate - prevTranslate;
+            const threshold = viewport.offsetWidth * 0.2;
+            if (movedBy < -threshold && currentIndex < totalPages - 1) currentIndex += 1;
+            else if (movedBy > threshold && currentIndex > 0) currentIndex -= 1;
+        }
+        goToPage(currentIndex);
+    }
+
+    viewport.addEventListener('touchstart', touchStart, { passive: false });
+    viewport.addEventListener('touchmove', touchMove, { passive: false });
+    viewport.addEventListener('touchend', touchEnd);
+    viewport.addEventListener('mousedown', touchStart);
+    window.addEventListener('mousemove', touchMove);
+    window.addEventListener('mouseup', touchEnd);
+
+    async function requestNotificationPermission() {
+        if (!currentUsername) {
+            alert("이름을 먼저 등록하고 저장해 주세요.");
+            notificationToggle.checked = false;
+            return;
+        }
+
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            localStorage.setItem('duty_notification_enabled', 'true');
+            if (messaging) {
+                try {
+                    const currentToken = await getToken(messaging, { 
+                        vapidKey: 'YOUR_PUBLIC_VAPID_KEY' 
+                    });
+                    if (currentToken) {
+                        await set(ref(db, `push_tokens/${currentUsername}`), {
+                            token: currentToken,
+                            updatedAt: new Date().toISOString()
+                        });
+                        console.log("FCM 토큰 DB 등록 성공");
+                    }
+                } catch (err) {
+                    console.error("FCM 토큰 획득 실패:", err);
+                }
+            }
+        } else {
+            alert("알림 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요.");
+            notificationToggle.checked = false;
+            localStorage.setItem('duty_notification_enabled', 'false');
+        }
+    }
+
+    function processRawData(rawData) {
+        if (!rawData) return { list: [], rawHeader: '' };
+        const list = Array.isArray(rawData) ? rawData : Object.values(rawData);
+        let extractedHeader = '';
+
+        const processedList = list.map(item => {
+            let dateStr = item["dateStr"] || "";
+            if (!dateStr) {
+                const foundKey = Object.keys(item).find(k => k.includes("당직상황근무지정"));
+                if (foundKey) {
+                    dateStr = item[foundKey];
+                    if (!extractedHeader) extractedHeader = foundKey;
+                }
+            }
+
+            const parts = dateStr.split('/');
+            const day = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+            
+            return {
+                dateStr: dateStr,
+                day: day,
+                dayOfWeek: item["__EMPTY"] || item["dayOfWeek"] || "",
+                isHoliday: (item["__EMPTY_1"] === "공휴일") || item["isHoliday"] === true,
+                leaderRank: item["__EMPTY_2"] || item["leaderRank"] || "",
+                leaderName: (item["__EMPTY_3"] || item["leaderName"] || "").replace(/\s/g, ''),
+                worker1Rank: item["__EMPTY_4"] || item["worker1Rank"] || "",
+                worker1Name: (item["__EMPTY_5"] || item["worker1Name"] || "").replace(/\s/g, ''),
+                worker2Rank: item["__EMPTY_6"] || item["worker2Rank"] || "",
+                worker2Name: (item["__EMPTY_7"] || item["worker2Name"] || "").replace(/\s/g, ''),
+                shiftType: item["__EMPTY_8"] || item["shiftType"] || "",
+                note: item["__EMPTY_9"] || item["note"] || ""
+            };
+        });
+
+        return { list: processedList, rawHeader: extractedHeader };
+    }
+
+    const dbRef = ref(db, 'gwanak-on');
+    onValue(dbRef, (snapshot) => {
+        const val = snapshot.val();
+        if (val) {
+            const { list, rawHeader } = processRawData(val);
+            dutyData = list;
+            document.getElementById('app-header').innerText = rawHeader || `당직상황근무지정 ${todayMonth}월`;
+            renderCalendar();
+            renderDutyInfo();
+        }
+    });
+
+    function renderCalendar() {
+        const grid = document.getElementById('calendar-grid');
+        grid.innerHTML = `
+            <div class="day-header sun">일</div><div class="day-header">월</div><div class="day-header">화</div>
+            <div class="day-header">수</div><div class="day-header">목</div><div class="day-header">금</div>
+            <div class="day-header sat">토</div>
+            <div class="day-cell other-month"><span class="day-num">28</span></div>
+            <div class="day-cell other-month"><span class="day-num">29</span></div>
+            <div class="day-cell other-month"><span class="day-num">30</span></div>
+        `;
+
+        for (let day = 1; day <= 31; day++) {
+            const dayDuties = dutyData.filter(d => d.day === day);
+            const isToday = (day === todayDay);
+            const dayOfWeekIdx = (3 + day - 1) % 7;
+            const isHoliday = dayDuties.some(d => d.isHoliday);
+
+            let dayClass = "";
+            if (dayOfWeekIdx === 0 || isHoliday) dayClass = "sun";
+            else if (dayOfWeekIdx === 6) dayClass = "sat";
+
+            let dutyBadgesHTML = "";
+            dayDuties.forEach(d => {
+                if (d.shiftType) {
+                    let shiftClass = "";
+                    if (d.shiftType.includes("일직")) shiftClass = "shift-day";
+                    else if (d.shiftType.includes("숙직")) shiftClass = "shift-night";
+                    
+                    dutyBadgesHTML += `<span class="duty-badge ${shiftClass}">[${d.shiftType}]</span>`;
+                }
+                [d.leaderName, d.worker1Name, d.worker2Name].forEach(name => {
+                    if (!name) return;
+                    const isMe = name === currentUsername;
+                    dutyBadgesHTML += `<span class="duty-badge ${isMe ? 'my-duty' : ''}">${name}</span>`;
+                });
+            });
+
+            const cellHTML = `
+                <div class="day-cell ${dayClass} ${isToday ? 'today' : ''}" data-day="${day}">
+                    <span class="day-num">${day}</span>
+                    <div class="duty-list">${dutyBadgesHTML}</div>
+                </div>
+            `;
+            grid.insertAdjacentHTML('beforeend', cellHTML);
+        }
+
+        grid.insertAdjacentHTML('beforeend', `<div class="day-cell other-month sat"><span class="day-num">1</span></div>`);
+
+        grid.querySelectorAll('.day-cell[data-day]').forEach(cell => {
+            cell.addEventListener('click', () => {
+                selectedDay = parseInt(cell.getAttribute('data-day'), 10);
+                renderDutyInfo();
+                goToPage(1);
+            });
+        });
+    }
+
+    window.changeDay = function(delta) {
+        const nextDay = selectedDay + delta;
+        if (nextDay >= 1 && nextDay <= 31) {
+            selectedDay = nextDay;
+            renderDutyInfo();
+        }
+    };
+
+    function renderDutyInfo() {
+        const currentDataList = dutyData.filter(d => d.day === selectedDay);
+        const todayCard = document.getElementById('today-card');
+
+        const dayOfWeekIdx = (3 + selectedDay - 1) % 7;
+        const currentDayOfWeekStr = weekDays[dayOfWeekIdx];
+        const isToday = (selectedDay === todayDay);
+        const isHoliday = currentDataList.some(d => d.isHoliday);
+
+        let shiftsHTML = "";
+
+        if (currentDataList.length > 0) {
+            currentDataList.forEach(d => {
+                const shiftTitle = d.shiftType || "당직";
+                
+                // 일직/숙직인 경우에만 지정 클래스 부여 (일반 '당직'에는 적용 안 됨)
+                let badgeClass = "";
+                if (shiftTitle.includes("일직")) badgeClass = "day";
+                else if (shiftTitle.includes("숙직")) badgeClass = "night";
+
+                let workersHTML = "";
+                if (d.worker1Name && d.worker2Name) {
+                    workersHTML = `${d.worker1Name} <span class="rank">(${d.worker1Rank})</span>&nbsp;&nbsp;${d.worker2Name} <span class="rank">(${d.worker2Rank})</span>`;
+} else if (d.worker1Name) {
+                    workersHTML = `${d.worker1Name} <span class="rank">(${d.worker1Rank})</span>`;
+                } else if (d.worker2Name) {
+                    workersHTML = `${d.worker2Name} <span class="rank">(${d.worker2Rank})</span>`;
+                } else {
+                    workersHTML = "-";
+                }
+
+                shiftsHTML += `
+                    <div class="shift-section">
+                        <div class="shift-header"><span class="shift-badge ${badgeClass}">${shiftTitle}</span></div>
+                        <div class="duty-row"><div class="duty-role">상황책임관</div><div class="duty-name">${d.leaderName ? `${d.leaderName} <span class="rank">(${d.leaderRank})</span>` : '-'}</div></div>
+                        <div class="duty-row"><div class="duty-role">상황근무자</div><div class="duty-name">${workersHTML}</div></div>
+                    </div>
+                `;
+            });
+        } else {
+            shiftsHTML = `<p style="color:var(--text-sub); font-size:14px; padding: 12px 0; text-align: center;">지정된 근무 데이터가 없습니다.</p>`;
+        }
+
+        todayCard.innerHTML = `
+            <div class="date-nav-header">
+                <button class="date-btn" onclick="changeDay(-1)">‹</button>
+                <div class="greeting">
+                    ${todayMonth}월 ${selectedDay}일 (${currentDataList[0]?.dayOfWeek || currentDayOfWeekStr})
+                    ${isToday ? '<span class="today-tag">오늘</span>' : ''}
+                    ${isHoliday ? '<span class="holiday">(공휴일)</span>' : ''}
+                </div>
+                <button class="date-btn" onclick="changeDay(1)">›</button>
+            </div>
+            ${shiftsHTML}
+        `;
+
+        document.getElementById('my-name-display').innerText = currentUsername;
+        const myNextDuty = dutyData.find(d => 
+            d.day >= todayDay && 
+            (d.leaderName === currentUsername || d.worker1Name === currentUsername || d.worker2Name === currentUsername)
+        );
+
+        if (myNextDuty) {
+            const shiftLabel = myNextDuty.shiftType ? ` (${myNextDuty.shiftType})` : '';
+            document.getElementById('next-duty-date').innerText = `${todayMonth}월 ${myNextDuty.day}일 (${myNextDuty.dayOfWeek})${shiftLabel}`;
+            const dDayVal = myNextDuty.day - todayDay;
+            document.getElementById('next-d-day').innerText = dDayVal === 0 ? "D-Day" : `D-${dDayVal}`;
+        } else {
+            document.getElementById('next-duty-date').innerText = "일정 없음";
+            document.getElementById('next-d-day').innerText = "D--";
+        }
+    }
+
+    function saveUsername() {
+        const input = document.getElementById('username-input');
+        const feedback = document.getElementById('save-feedback');
+        const newName = input.value.trim();
+
+        if (!newName) {
+            alert('이름을 입력해 주세요.');
+            input.focus();
+            return;
+        }
+
+        currentUsername = newName;
+        localStorage.setItem('duty_app_username', newName);
+
+        renderCalendar();
+        renderDutyInfo();
+
+        feedback.classList.add('show');
+        setTimeout(() => feedback.classList.remove('show'), 2000);
+    }
+
+    window.addEventListener('resize', () => goToPage(currentIndex));
+    goToPage(1);
+</script>
+</body>
+</html>

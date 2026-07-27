@@ -1,0 +1,12 @@
+{
+  "name": "과낙ON",
+  "start_url": "./",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "gwanakonIcon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>엑셀 ➔ 서버 저장 및 조회</title>
+  
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
+    .box { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f4f4f4; }
+    button { cursor: pointer; padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; }
+    button:hover { background-color: #0056b3; }
+  </style>
+</head>
+<body>
+
+  <h1>📊 Excel to Server DB 관리자</h1>
+
+  <div class="box">
+    <h3>1. 엑셀 파일 업로드 및 DB 저장</h3>
+    <input type="file" id="excelFileInput" accept=".xlsx, .xls" />
+    <button id="uploadBtn">서버에 저장하기</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { 
+      getDatabase, ref, set
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+
+      // 🔴 본인의 Firebase 프로젝트 설정값으로 변경하세요.
+    const firebaseConfig = {
+      apiKey: "AIzaSyDvEGZcUtz8PIyOLg9M_v71dL7aQG1ntwk",
+      authDomain: "gwanak-on.firebaseapp.com",
+      databaseURL: "https://gwanak-on-default-rtdb.firebaseio.com",
+      projectId: "gwanak-on",
+      storageBucket: "gwanak-on.firebasestorage.app",
+      messagingSenderId: "101226390647",
+      appId: "1:101226390647:web:67c72a62b3079c16e4d272",
+      measurementId: "G-EQ5GV6GB99"
+    };
+
+      // Firebase 및 Firestore 초기화
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    // 저장할 Firestore 컬렉션 이름 (예: 'products' 또는 'users')
+    const COLLECTION_NAME = "excel_data";
+
+    // -------------------------------------------------------------
+    // [기능 1] 엑셀 파싱 후 Firebase Firestore에 저장 (UPSERT)
+    // -------------------------------------------------------------
+    document.getElementById('uploadBtn').addEventListener('click', async () => {
+
+      const fileInput = document.getElementById('excelFileInput');
+      const file = fileInput.files[0];
+
+      if (!file) {
+        alert("엑셀 파일을 먼저 선택해 주세요.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const data = new Uint8Array(e.target.result);
+
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        worksheet['!ref'] = "B1:L44";
+
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+          raw:false, 
+          defval: ""
+        });
+
+        const db = getDatabase();
+        set(ref(db, 'gwanak-on'), jsonData)
+          .then(() => {
+            alert("데이터 저장에 성공했습니다.");
+          })
+          .catch((error) => {
+            alert("데이터 저장에 실패했습니다.");
+            console.error(error);
+          });
+      }
+      reader.readAsArrayBuffer(file);
+    });
+  </script>
+</body>
+</html>
