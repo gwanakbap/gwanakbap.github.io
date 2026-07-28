@@ -105,7 +105,7 @@ class Infinite2DRenderer {
 
   async init() {
     try {
-      const res = await fetch('data/meals.json', { cache: 'no-store' });
+      const res = await fetch('../data/meals.json', { cache: 'no-store' });
       const data = await res.json();
 
       const today = new Date();
@@ -335,7 +335,7 @@ class InfiniteConveyorRenderer {
 
   async init() {
     try {
-      const res = await fetch('data/meals.json', { cache: 'no-store' });
+      const res = await fetch('../data/meals.json', { cache: 'no-store' });
       const data = await res.json();
 
       this.daysData = data.days;
