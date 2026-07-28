@@ -602,3 +602,20 @@ window.addEventListener('load', () => {
   const app = new AppController('today-menu');
   app.start();
 });
+
+let deferredPrompt;
+const installBtn = document.getElementById('install-btn');
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  
+  if(deferredPrompt) installBtn.style.display = 'block';
+});
+
+installBtn.addEventListener('click', async () => {
+  deferredPrompt.prompt();
+  
+  deferredPrompt = null;
+  installBtn.style.display = 'none';
+});
