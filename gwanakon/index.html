@@ -362,6 +362,34 @@
         }
         .feedback-msg { font-size: 12px; font-weight: 700; color: #16a34a; margin-top: 4px; display: none; align-items: center; }
         .feedback-msg.show { display: flex; }
+
+        #install-btn {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            
+            min-width: 80vw;
+            padding: 10px;
+            background-color: #e53935;
+            color: #ffffff;
+            
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            
+            cursor: pointer;
+            z-index: 9999;
+            transition: all 0.3s ease;
+            
+            -webkit-tap-highlight-color: transparent;
+            }
     </style>
 </head>
 <body>
@@ -429,6 +457,8 @@
         <button class="nav-item active" id="nav-btn-1"><span class="icon">🚨</span><span>근무</span></button>
         <button class="nav-item" id="nav-btn-2"><span class="icon">⚙️</span><span>설정</span></button>
     </nav>
+
+    <div id="install-btn">과낙ON 설치하기</div>
 </div>
 
 <script type="module">
@@ -462,6 +492,7 @@
     // }
 
     let dutyData = [];
+    let lastRawDataJson = localStorage.getItem('duty_cached_data') || "";
     let currentUsername = localStorage.getItem('duty_app_username') || "";
 
     const now = new Date();
@@ -640,17 +671,50 @@
         return { list: processedList, rawHeader: extractedHeader };
     }
 
-    const dbRef = ref(db, 'gwanak-on');
-    onValue(dbRef, (snapshot) => {
-        const val = snapshot.val();
-        if (val) {
-            const { list, rawHeader } = processRawData(val);
+    if (lastRawDataJson) {
+        try {
+            const cachedVal = JSON.parse(lastRawDataJson);
+            const { list, rawHeader } = processRawData(cachedVal);
             dutyData = list;
             document.getElementById('app-header').innerText = rawHeader || `당직상황근무지정 ${todayMonth}월`;
+            
+            // 즉시 렌더링 실행
             renderCalendar();
             renderDutyInfo();
+            console.log("캐시된 데이터로 즉시 렌더링 완료 (로딩 없음)");
+        } catch (e) {
+            console.error("캐시 데이터 파싱 오류:", e);
         }
-    });
+    }
+
+    const dbRef = ref(db, 'gwanak-on');
+        onValue(dbRef, (snapshot) => {
+            const val = snapshot.val();
+            if (!val) return;
+
+            // 1. 새로 들어온 데이터를 JSON 문자열로 변환하여 이전 데이터와 비교
+            const currentRawDataJson = JSON.stringify(val);
+            
+            // 2. 데이터가 이전과 동일하다면 새로 로딩/렌더링하지 않고 종료
+            if (currentRawDataJson === lastRawDataJson) {
+                console.log("데이터 변경 없음: UI 재로딩을 스킵합니다.");
+                return;
+            }
+
+            // 3. 데이터가 변경된 경우에만 갱신 실행
+            lastRawDataJson = currentRawDataJson; // 최신 데이터 상태 저장
+            localStorage.setItem('duty_cached_data', currentRawDataJson);
+            
+            const { list, rawHeader } = processRawData(val);
+            dutyData = list;
+            
+            document.getElementById('app-header').innerText = rawHeader || `당직상황근무지정 ${todayMonth}월`;
+            
+            // UI 렌더링 실행
+            renderCalendar();
+            renderDutyInfo();
+            console.log("새로운 데이터가 감지되어 UI를 갱신하였습니다.");
+        });
 
     function renderCalendar() {
         const grid = document.getElementById('calendar-grid');
@@ -811,8 +875,34 @@
         setTimeout(() => feedback.classList.remove('show'), 2000);
     }
 
-    window.addEventListener('resize', () => goToPage(currentIndex));
-    goToPage(1);
+    window.addEventListener('load', () => {
+        track.style.transition = 'none'; 
+        
+        goToPage(1); 
+        
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                track.style.transition = ''; 
+            });
+        });
+    });
+
+    let deferredPrompt;
+    const installBtn = document.getElementById('install-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    
+    if(deferredPrompt) installBtn.style.display = 'block';
+    });
+
+    installBtn.addEventListener('click', async () => {
+    deferredPrompt.prompt();
+    
+    deferredPrompt = null;
+    installBtn.style.display = 'none';
+    });
 </script>
 </body>
 </html>
