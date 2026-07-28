@@ -1,10 +1,11 @@
 {
   "name": "과낙ON",
-  "start_url": "./",
+  "start_url": "/gwanakon/",
   "display": "standalone",
+  "scope": "/gwanakon/",
   "icons": [
     {
-      "src": "gwanakonIcon.png",
+      "src": "./gwanakonIcon.png",
       "type": "image/png",
       "sizes": "512x512"
     }

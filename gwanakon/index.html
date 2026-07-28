@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>과낙ON</title>
-    <link rel="icon" href="gwanakonIcon.png" />
-    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/gwanakon/gwanakonIcon.png" />
+    <link rel="manifest" href="/gwanakon/manifest.json">
     <style>
         :root {
             --primary-color: #e53935;
@@ -450,16 +450,16 @@
     const db = getDatabase(app);
     let messaging = null;
 
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').then((registration) => {
-            console.log('PWA Service Worker 등록 성공:', registration.scope);
-            try {
-                messaging = getMessaging(app);
-            } catch (e) {
-                console.warn('FCM Messaging을 초기화할 수 없습니다.');
-            }
-        });
-    }
+    // if ('serviceWorker' in navigator) {
+    //     navigator.serviceWorker.register('/sw.js').then((registration) => {
+    //         console.log('PWA Service Worker 등록 성공:', registration.scope);
+    //         try {
+    //             messaging = getMessaging(app);
+    //         } catch (e) {
+    //             console.warn('FCM Messaging을 초기화할 수 없습니다.');
+    //         }
+    //     });
+    // }
 
     let dutyData = [];
     let currentUsername = localStorage.getItem('duty_app_username') || "";
