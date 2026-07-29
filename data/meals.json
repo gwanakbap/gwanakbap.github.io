@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-07-27T07:32:52.461Z",
+    "generatedAt": "2026-07-29T04:46:55.360Z",
     "teamColor": {
       "빨강": 1,
       "노랑": 2,
@@ -127,7 +127,7 @@
           ]
         },
         "afternoon": {
-          "teamNumber": null,
+          "teamNumber": 3,
           "items": [
             "어묵김치국",
             "삼치구이",
