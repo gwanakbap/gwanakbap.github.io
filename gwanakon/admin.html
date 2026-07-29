@@ -2,97 +2,431 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>엑셀 ➔ 서버 저장 및 조회</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>과낙ON - 관리자</title>
   
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- SheetJS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
-    body { font-family: sans-serif; padding: 20px; line-height: 1.6; }
-    .box { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-    th { background-color: #f4f4f4; }
-    button { cursor: pointer; padding: 8px 16px; background-color: #007bff; color: white; border: none; border-radius: 4px; }
-    button:hover { background-color: #0056b3; }
+    :root {
+      --primary-color: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg-color: #f4f6f8;
+      --text-main: #333;
+      --text-sub: #666;
+      --card-bg: #ffffff;
+      --blue: rgb(172, 190, 227);
+      --header-height: 52px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+    }
+
+    body {
+      background-color: #d1d5db;
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    #admin-container {
+      width: 100%;
+      max-width: 440px;
+      min-height: 100vh;
+      background-color: var(--bg-color);
+      box-shadow: 0 0 20px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* 당직 앱 스타일의 개선된 헤더 */
+    header {
+      background-color: var(--blue);
+      padding: 0 16px;
+      font-size: 18px;
+      font-weight: 800;
+      color: #1e293b;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: var(--header-height);
+      z-index: 10;
+      flex-shrink: 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .header-badge {
+      font-size: 11px;
+      background-color: rgba(30, 41, 59, 0.1);
+      color: #1e293b;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-weight: 700;
+    }
+
+    .main-content {
+      padding: 16px;
+      flex: 1;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border-radius: 14px;
+      padding: 20px 16px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.04);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* 드래그/클릭 업로드존 */
+    .upload-zone {
+      border: 2px dashed #cbd5e1;
+      border-radius: 12px;
+      padding: 32px 16px;
+      text-align: center;
+      background-color: #f8fafc;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .upload-zone:active, .upload-zone.dragover {
+      background-color: #eff6ff;
+      border-color: var(--primary-color);
+    }
+
+    .upload-icon {
+      font-size: 32px;
+    }
+
+    .upload-text {
+      font-size: 13.5px;
+      font-weight: 600;
+      color: var(--text-sub);
+    }
+
+    .file-info {
+      font-size: 12.5px;
+      color: var(--primary-color);
+      font-weight: 700;
+      word-break: break-all;
+    }
+
+    #excelFileInput {
+      display: none;
+    }
+
+    /* 비밀번호 입력 영역 추가 */
+    .password-group {
+      margin-top: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .password-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .password-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s ease;
+      background-color: #f8fafc;
+    }
+
+    .password-input:focus {
+      border-color: var(--primary-color);
+      background-color: #ffffff;
+    }
+
+    /* 버튼 스타일 */
+    .btn-primary {
+      width: 100%;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background-color 0.15s ease, transform 0.1s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 16px;
+    }
+
+    .btn-primary:disabled {
+      background-color: #cbd5e1;
+      color: #94a3b8;
+      cursor: not-allowed;
+    }
+
+    .btn-primary:not(:disabled):active {
+      background-color: var(--primary-hover);
+      transform: scale(0.99);
+    }
+
+    /* 상태 메시지 */
+    .status-msg {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+      text-align: center;
+      line-height: 1.4;
+    }
+
+    .status-msg.success {
+      display: block;
+      background-color: #dcfce7;
+      color: #15803d;
+    }
+
+    .status-msg.error {
+      display: block;
+      background-color: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .status-msg.loading {
+      display: block;
+      background-color: #e0f2fe;
+      color: #0369a1;
+    }
   </style>
 </head>
 <body>
 
-  <h1>📊 Excel to Server DB 관리자</h1>
+<div id="admin-container">
+  <header>
+    <span>과낙ON 데이터 관리</span>
+    <span class="header-badge">Admin</span>
+  </header>
 
-  <div class="box">
-    <h3>1. 엑셀 파일 업로드 및 DB 저장</h3>
-    <input type="file" id="excelFileInput" accept=".xlsx, .xls" />
-    <button id="uploadBtn">서버에 저장하기</button>
-  </div>
+  <main class="main-content">
+    <div class="card">
+      <div class="card-title">📁 엑셀 파일 업로드</div>
+      
+      <!-- 파일 선택 / 드래그 영역 -->
+      <div class="upload-zone" id="uploadZone">
+        <span class="upload-icon">📄</span>
+        <span class="upload-text" id="uploadText">클릭하거나 엑셀(.xlsx) 파일을 이 곳에 드래그하세요</span>
+        <span class="file-info" id="fileNameInfo"></span>
+      </div>
+      
+      <input type="file" id="excelFileInput" accept=".xlsx, .xls" />
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-    import { 
-      getDatabase, ref, set
-    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+      <!-- 비밀번호 입력 그룹 -->
+      <div class="password-group">
+        <label for="adminPassword" class="password-label">🔒 관리자 비밀번호</label>
+        <input type="password" id="adminPassword" class="password-input" placeholder="비밀번호를 입력하세요" autocomplete="off" />
+      </div>
 
+      <button id="uploadBtn" class="btn-primary" disabled>
+        <span>서버에 저장하기</span>
+      </button>
 
-      // 🔴 본인의 Firebase 프로젝트 설정값으로 변경하세요.
-    const firebaseConfig = {
-      apiKey: "AIzaSyDvEGZcUtz8PIyOLg9M_v71dL7aQG1ntwk",
-      authDomain: "gwanak-on.firebaseapp.com",
-      databaseURL: "https://gwanak-on-default-rtdb.firebaseio.com",
-      projectId: "gwanak-on",
-      storageBucket: "gwanak-on.firebasestorage.app",
-      messagingSenderId: "101226390647",
-      appId: "1:101226390647:web:67c72a62b3079c16e4d272",
-      measurementId: "G-EQ5GV6GB99"
-    };
+      <div id="statusMsg" class="status-msg"></div>
+    </div>
+  </main>
+</div>
 
-      // Firebase 및 Firestore 초기화
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-    // 저장할 Firestore 컬렉션 이름 (예: 'products' 또는 'users')
-    const COLLECTION_NAME = "excel_data";
+  const firebaseConfig = {
+    apiKey: "AIzaSyDvEGZcUtz8PIyOLg9M_v71dL7aQG1ntwk",
+    authDomain: "gwanak-on.firebaseapp.com",
+    databaseURL: "https://gwanak-on-default-rtdb.firebaseio.com",
+    projectId: "gwanak-on",
+    storageBucket: "gwanak-on.firebasestorage.app",
+    messagingSenderId: "101226390647",
+    appId: "1:101226390647:web:67c72a62b3079c16e4d272",
+    measurementId: "G-EQ5GV6GB99"
+  };
 
-    // -------------------------------------------------------------
-    // [기능 1] 엑셀 파싱 후 Firebase Firestore에 저장 (UPSERT)
-    // -------------------------------------------------------------
-    document.getElementById('uploadBtn').addEventListener('click', async () => {
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
 
-      const fileInput = document.getElementById('excelFileInput');
-      const file = fileInput.files[0];
+  const uploadZone = document.getElementById('uploadZone');
+  const fileInput = document.getElementById('excelFileInput');
+  const adminPasswordInput = document.getElementById('adminPassword');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const uploadText = document.getElementById('uploadText');
+  const fileNameInfo = document.getElementById('fileNameInfo');
+  const statusMsg = document.getElementById('statusMsg');
 
-      if (!file) {
-        alert("엑셀 파일을 먼저 선택해 주세요.");
+  let selectedFile = null;
+
+  // 클릭 이벤트
+  uploadZone.addEventListener('click', () => fileInput.click());
+
+  // 파일 선택 이벤트
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleFileSelect(file);
+  });
+
+  // 드래그 앤 드롭
+  uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+  });
+
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+
+  uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) {
+      fileInput.files = e.dataTransfer.files;
+      handleFileSelect(e.dataTransfer.files[0]);
+    }
+  });
+
+  // 비밀번호 입력 처리
+  adminPasswordInput.addEventListener('input', checkCanSubmit);
+  adminPasswordInput.addEventListener('keyup', (e) => {
+    if (e.key === 'Enter' && !uploadBtn.disabled) {
+      uploadBtn.click();
+    }
+  });
+
+  // 파일 선택 시 화면 UI 처리
+  function handleFileSelect(file) {
+    selectedFile = file;
+    uploadText.innerText = "선택된 파일:";
+    fileNameInfo.innerText = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+    showStatus("", "");
+    checkCanSubmit();
+  }
+
+  // 제출 가능 상태 체크 (파일과 비밀번호가 모두 존재하는지)
+  function checkCanSubmit() {
+    const password = adminPasswordInput.value.trim();
+    if (selectedFile && password.length > 0) {
+      uploadBtn.disabled = false;
+    } else {
+      uploadBtn.disabled = true;
+    }
+  }
+
+  // Firebase 저장 이벤트
+  uploadBtn.addEventListener('click', async () => {
+    const enteredPassword = adminPasswordInput.value.trim();
+
+    if (!selectedFile) {
+      alert("먼저 엑셀 파일을 선택해 주세요.");
+      return;
+    }
+
+    if (!enteredPassword) {
+      alert("비밀번호를 입력해 주세요.");
+      return;
+    }
+
+    uploadBtn.disabled = true;
+    showStatus("🔑 비밀번호 확인 및 데이터 처리 중...", "loading");
+
+    try {
+      // 1. Firebase에서 설정된 관리자 비밀번호 가져오기
+      const pwdSnapshot = await get(ref(db, 'admin/password'));
+      
+      if (!pwdSnapshot.exists()) {
+        showStatus("❌ 서버에 관리자 비밀번호가 설정되어 있지 않습니다.", "error");
+        uploadBtn.disabled = false;
         return;
       }
 
+      const realPassword = pwdSnapshot.val();
+
+      // 2. 비밀번호 일치 여부 검증
+      if (enteredPassword !== String(realPassword)) {
+        showStatus("❌ 비밀번호가 올바르지 않습니다.", "error");
+        uploadBtn.disabled = false;
+        return;
+      }
+
+      // 3. 비밀번호 확인 성공 후 엑셀 읽기 진행
+      showStatus("⏳ 엑셀을 읽어 Firebase 서버에 저장 중입니다...", "loading");
+
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const data = new Uint8Array(e.target.result);
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
 
-        const workbook = XLSX.read(data, { type: 'array' });
-        
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        worksheet['!ref'] = "B1:L44";
+          worksheet['!ref'] = "B1:K44";
 
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-          raw:false, 
-          defval: ""
-        });
-
-        const db = getDatabase();
-        set(ref(db, 'gwanak-on'), jsonData)
-          .then(() => {
-            alert("데이터 저장에 성공했습니다.");
-          })
-          .catch((error) => {
-            alert("데이터 저장에 실패했습니다.");
-            console.error(error);
+          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+            raw: false,
+            defval: ""
           });
-      }
-      reader.readAsArrayBuffer(file);
-    });
-  </script>
+
+          // 데이터 저장
+          await set(ref(db, 'gwanak-on'), jsonData);
+          showStatus("✅ 데이터 저장에 성공했습니다!", "success");
+          adminPasswordInput.value = ""; // 비밀번호 초기화
+          checkCanSubmit();
+        } catch (error) {
+          console.error(error);
+          showStatus("❌ 데이터 저장에 실패했습니다.", "error");
+        } finally {
+          uploadBtn.disabled = false;
+        }
+      };
+
+      reader.onerror = () => {
+        showStatus("❌ 파일을 읽는 데 실패했습니다.", "error");
+        uploadBtn.disabled = false;
+      };
+
+      reader.readAsArrayBuffer(selectedFile);
+
+    } catch (error) {
+      console.error(error);
+      showStatus("❌ 서버 통신 중 오류가 발생했습니다.", "error");
+      uploadBtn.disabled = false;
+    }
+  });
+
+  function showStatus(msg, type) {
+    statusMsg.className = "status-msg " + type;
+    statusMsg.innerText = msg;
+  }
+</script>
 </body>
 </html>
