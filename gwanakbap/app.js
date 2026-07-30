@@ -1,3 +1,18 @@
+if ('serviceWorker' in navigator) {
+  let refreshing = false;
+
+  // 서비스 워커가 교체(controllerchange)되면 페이지 자동 새로고침
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
+
+  // 서비스 워커 등록
+  navigator.serviceWorker.register('./sw.js');
+}
+
 class AppController {
   constructor(rootId) {
     this.rootId = rootId;
