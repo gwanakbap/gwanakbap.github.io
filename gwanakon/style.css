@@ -19,20 +19,22 @@
 html, body {
     margin: 0;
     padding: 0;
-    height: 100dvh;
+    height: 100%;
     overflow: hidden;
-    overscroll-behavior-y: none;
-    display: flex;
     background-color: #d1d5db;
+}
+body {
+    display: block;
     justify-content: center;
 }
 #app-container {
-    width: 100%;
+    margin: auto;
     max-width: 400px;
-    height: 100dvh;
+    height: 100%;
     background-color: var(--bg-color);
     box-shadow: 0 0 20px rgba(0,0,0,0.1);
-    position: relative;
+    position: fixed;
+    inset: 0;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -58,6 +60,7 @@ header {
 
 .swipe-viewport {
     flex: 1;
+    min-height:0;
     overflow: hidden;
     position: relative;
     width: 100%;
@@ -77,6 +80,7 @@ header {
 .view-page {
     width: 33.3333%;
     height: 100%;
+    min-height:0;
     overflow-y: auto;
     padding: 12px;
     -webkit-overflow-scrolling: touch;
@@ -101,7 +105,8 @@ header {
     margin-bottom: 0;
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
 }
 .calendar-nav {
     display: flex;
