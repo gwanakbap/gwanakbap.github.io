@@ -22,6 +22,9 @@ html, body {
     height: 100dvh;
     overflow: hidden;
     overscroll-behavior-y: none;
+    display: flex;
+    background-color: #d1d5db;
+    justify-content: center;
 }
 #app-container {
     width: 100%;
