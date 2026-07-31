@@ -93,6 +93,36 @@
       gap: 6px;
     }
 
+    /* 공통 폼 요소 스타일 (월 입력, 비밀번호 입력에 사용) */
+    .form-group {
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s ease;
+      background-color: #f8fafc;
+    }
+
+    .form-input:focus {
+      border-color: var(--primary-color);
+      background-color: #ffffff;
+    }
+
     /* 드래그/클릭 업로드존 */
     .upload-zone {
       border: 2px dashed #cbd5e1;
@@ -106,6 +136,7 @@
       flex-direction: column;
       align-items: center;
       gap: 10px;
+      margin-bottom: 16px; /* 업로드 존 아래 여백 추가 */
     }
 
     .upload-zone:active, .upload-zone.dragover {
@@ -132,36 +163,6 @@
 
     #excelFileInput {
       display: none;
-    }
-
-    /* 비밀번호 입력 영역 추가 */
-    .password-group {
-      margin-top: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .password-label {
-      font-size: 13px;
-      font-weight: 700;
-      color: var(--text-main);
-    }
-
-    .password-input {
-      width: 100%;
-      padding: 12px 14px;
-      border: 1px solid #cbd5e1;
-      border-radius: 8px;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s ease;
-      background-color: #f8fafc;
-    }
-
-    .password-input:focus {
-      border-color: var(--primary-color);
-      background-color: #ffffff;
     }
 
     /* 버튼 스타일 */
@@ -235,21 +236,26 @@
 
   <main class="main-content">
     <div class="card">
-      <div class="card-title">📁 엑셀 파일 업로드</div>
+      <div class="card-title">📁 엑셀 데이터 업로드</div>
       
-      <!-- 파일 선택 / 드래그 영역 -->
+      <!-- ✅ 1. 저장할 월 선택 그룹 추가 -->
+      <div class="form-group">
+        <label for="monthInput" class="form-label">📅 저장할 년-월</label>
+        <input type="month" id="monthInput" class="form-input" />
+      </div>
+
+      <!-- 2. 파일 선택 / 드래그 영역 -->
       <div class="upload-zone" id="uploadZone">
         <span class="upload-icon">📄</span>
         <span class="upload-text" id="uploadText">클릭하거나 엑셀(.xlsx) 파일을 이 곳에 드래그하세요</span>
         <span class="file-info" id="fileNameInfo"></span>
       </div>
-      
       <input type="file" id="excelFileInput" accept=".xlsx, .xls" />
 
-      <!-- 비밀번호 입력 그룹 -->
-      <div class="password-group">
-        <label for="adminPassword" class="password-label">🔒 관리자 비밀번호</label>
-        <input type="password" id="adminPassword" class="password-input" placeholder="비밀번호를 입력하세요" autocomplete="off" />
+      <!-- 3. 비밀번호 입력 그룹 (기존 스타일 변경 적용) -->
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="adminPassword" class="form-label">🔒 관리자 비밀번호</label>
+        <input type="password" id="adminPassword" class="form-input" placeholder="비밀번호를 입력하세요" autocomplete="off" />
       </div>
 
       <button id="uploadBtn" class="btn-primary" disabled>
@@ -279,6 +285,7 @@
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
 
+  const monthInput = document.getElementById('monthInput'); // 추가된 변수
   const uploadZone = document.getElementById('uploadZone');
   const fileInput = document.getElementById('excelFileInput');
   const adminPasswordInput = document.getElementById('adminPassword');
@@ -315,8 +322,10 @@
     }
   });
 
-  // 비밀번호 입력 처리
+  // 입력 발생 시 제출 버튼 활성화 여부 체크
   adminPasswordInput.addEventListener('input', checkCanSubmit);
+  monthInput.addEventListener('input', checkCanSubmit); // 월 선택 시에도 체크
+  
   adminPasswordInput.addEventListener('keyup', (e) => {
     if (e.key === 'Enter' && !uploadBtn.disabled) {
       uploadBtn.click();
@@ -332,10 +341,11 @@
     checkCanSubmit();
   }
 
-  // 제출 가능 상태 체크 (파일과 비밀번호가 모두 존재하는지)
+  // ✅ 제출 가능 상태 체크 (파일, 월 선택, 비밀번호가 모두 존재하는지)
   function checkCanSubmit() {
     const password = adminPasswordInput.value.trim();
-    if (selectedFile && password.length > 0) {
+    const selectedMonth = monthInput.value;
+    if (selectedFile && password.length > 0 && selectedMonth !== "") {
       uploadBtn.disabled = false;
     } else {
       uploadBtn.disabled = true;
@@ -345,6 +355,12 @@
   // Firebase 저장 이벤트
   uploadBtn.addEventListener('click', async () => {
     const enteredPassword = adminPasswordInput.value.trim();
+    const selectedMonth = monthInput.value;
+
+    if (!selectedMonth) {
+      alert("저장할 년-월을 먼저 선택해 주세요.");
+      return;
+    }
 
     if (!selectedFile) {
       alert("먼저 엑셀 파일을 선택해 주세요.");
@@ -396,10 +412,14 @@
             defval: ""
           });
 
-          // 데이터 저장
-          await set(ref(db, 'gwanak-on'), jsonData);
-          showStatus("✅ 데이터 저장에 성공했습니다!", "success");
-          adminPasswordInput.value = ""; // 비밀번호 초기화
+          // ✅ 데이터 저장 (경로에 월 정보를 포함)
+          const targetRef = ref(db, `gwanak-on/${selectedMonth}`);
+          await set(targetRef, jsonData);
+          
+          showStatus(`✅ [${selectedMonth}] 데이터 저장에 성공했습니다!`, "success");
+          
+          // 성공 후 초기화 작업
+          adminPasswordInput.value = ""; 
           checkCanSubmit();
         } catch (error) {
           console.error(error);
