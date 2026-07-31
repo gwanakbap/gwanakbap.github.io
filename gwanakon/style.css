@@ -16,10 +16,12 @@
     font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     user-select: none;
 }
-body {
-    background-color: #d1d5db;
-    display: flex;
-    justify-content: center;
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior-y: none;
 }
 #app-container {
     width: 100%;
@@ -74,7 +76,6 @@ header {
     height: 100%;
     overflow-y: auto;
     padding: 12px;
-    padding-bottom: calc(var(--nav-height) + 10px);
     -webkit-overflow-scrolling: touch;
 }
 
@@ -328,7 +329,7 @@ header {
 .toggle-switch input:checked + .slider:before { transform: translateX(20px); }
 
 .bottom-nav {
-    position: absolute; bottom: 0; left: 0; width: 100%; height: var(--nav-height);
+    bottom: 0; left: 0; width: 100%; height: var(--nav-height);
     background-color: #ffffff; display: flex; border-top: 1px solid #e5e7eb; z-index: 10;
 }
 .nav-item {

@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'gwanakon-cache-v1.0.0';
+const STATIC_CACHE = 'gwanakon-cache-v1.0.14';
 
 const ASSETS = [
   './',
