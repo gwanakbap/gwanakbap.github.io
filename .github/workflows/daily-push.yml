@@ -1,0 +1,29 @@
+name: Daily Duty Push Notification
+
+on:
+  schedule:
+    # UTC 기준 23:00 = KST 기준 매일 오전 08:00 실행
+    - cron: '0 23 * * *'
+  # GitHub 화면에서 수동으로 실행해볼 수 있는 버튼 생성
+  workflow_dispatch:
+
+jobs:
+  send-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node.js 환경 설정
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 패키지 설치
+        run: npm install
+
+      - name: 푸시 발송 스크립트 실행
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node send-push.js
