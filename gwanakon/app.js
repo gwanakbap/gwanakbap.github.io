@@ -259,11 +259,32 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/fireba
         }
     }
 
-    const dbRef = ref(db, 'gwanak-on');
+    const currentYearStr = String(todayYear);
+    const currentMonthStr = String(todayMonth).padStart(2, '0'); // 7월 -> '07'
+    const dbPath = `gwanak-on/${currentYearStr}-${currentMonthStr}`; // 예: gwanak-on/2026-07
+    
+    console.log(`[DB 연결] 대상 경로: ${dbPath}`);
+    const dbRef = ref(db, dbPath);
+
+    // [수정된 부분] 2. 데이터 수신 및 부재(Null) 시 예외 처리
     onValue(dbRef, (snapshot) => {
         const val = snapshot.val();
-        if (!val) return;
+        
+        // 데이터가 DB에 없는 경우 (아직 이번 달 데이터가 안 올라옴)
+        if (!val) {
+            console.log("해당 월의 당직 데이터가 없습니다.");
+            lastRawDataJson = "";
+            localStorage.removeItem('duty_cached_data'); // 이전 달 캐시 비우기
+            
+            // 빈 데이터로 달력 및 당직 카드 초기화
+            applyDataToUI([], "");
+            
+            // applyDataToUI가 덮어쓴 헤더를 '업데이트 예정'으로 다시 덮어쓰기
+            document.getElementById('app-header').innerText = `${todayYear}년 ${todayMonth}월 (업데이트 예정)`;
+            return;
+        }
 
+        // 데이터가 있는 경우 정상 처리
         const currentRawDataJson = JSON.stringify(val);
         
         if (currentRawDataJson === lastRawDataJson) {
