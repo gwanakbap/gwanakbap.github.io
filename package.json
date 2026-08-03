@@ -1,3 +1,11 @@
 {
-  "type": "module"
+  "name": "gwanak-on-push-service",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "send-push": "node send-push.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
 }
