@@ -151,37 +151,39 @@ async function requestNotificationPermission() {
     if (!currentUsername) {
         alert("이름을 먼저 등록하고 저장해 주세요.");
         if (notificationToggle) notificationToggle.checked = false;
-        return;
+        return false;
     }
 
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-        localStorage.setItem('duty_notification_enabled', 'true');
-        if (messaging) {
-            try {
-                // ServiceWorker 등록 상태를 전달하여 안정적 토큰 획득
+    try {
+        const permission = await Notification.requestPermission();
+        if (permission === 'granted') {
+            localStorage.setItem('duty_notification_enabled', 'true');
+            if (messaging) {
                 const swReg = await navigator.serviceWorker.ready;
                 const currentToken = await getToken(messaging, { 
-                    vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A', // 웹 푸시 VAPID Key 입력
+                    vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
                     serviceWorkerRegistration: swReg
                 });
+
                 if (currentToken) {
-                    // enabled: true 값을 함께 저장하여 정기 발송 시 수신 허용 유저 필터링 가능
                     await set(ref(db, `push_tokens/${currentUsername}`), {
                         token: currentToken,
                         enabled: true,
                         updatedAt: new Date().toISOString()
                     });
                     console.log("FCM 토큰 및 수신 동의 DB 등록 성공");
+                    return true;
                 }
-            } catch (err) {
-                console.error("FCM 토큰 획득 실패:", err);
             }
+        } else {
+            alert("알림 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요.");
+            if (notificationToggle) notificationToggle.checked = false;
+            await disableNotificationPermission();
+            return false;
         }
-    } else {
-        alert("알림 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요.");
-        if (notificationToggle) notificationToggle.checked = false;
-        await disableNotificationPermission();
+    } catch (err) {
+        console.error("FCM 토큰 획득/저장 실패:", err);
+        return false;
     }
 }
 
@@ -498,8 +500,8 @@ function renderDutyInfo() {
     }
 }
 
-// [수정] 이름 변경 시 기존 DB 토큰 매핑을 새 이름으로 갱신
-function saveUsername() {
+// [수정] 이름 변경 및 저장 시 DB 토큰 매핑 갱신
+async function saveUsername() {
     const input = document.getElementById('username-input');
     const newName = input.value.trim();
 
@@ -513,18 +515,50 @@ function saveUsername() {
     currentUsername = newName;
     localStorage.setItem('duty_app_username', newName);
 
-    // 이름을 바꿨을 때 알림 수신이 켜져있다면 DB 노드도 새 이름으로 재등록
-    if (oldName && oldName !== newName && notificationToggle && notificationToggle.checked) {
-        disableNotificationPermission(); // 기존 이름 노드 비활성화
-        requestNotificationPermission(); // 새 이름 노드 동기화
+    // 알림 토글이 켜져 있는 상태라면 DB 상태 동기화 진행
+    const isNotificationEnabled = notificationToggle && notificationToggle.checked;
+
+    if (isNotificationEnabled) {
+        try {
+            // 1. 기존 이름 노드의 enabled 상태를 false로 안전하게 변경 (기존 이름이 다른 경우)
+            if (oldName && oldName !== newName) {
+                await set(ref(db, `push_tokens/${oldName}/enabled`), false);
+            }
+
+            // 2. 현재 브라우저 알림 권한 상태 체크
+            if (Notification.permission === 'granted') {
+                const swReg = await navigator.serviceWorker.ready;
+                const currentToken = await getToken(messaging, { 
+                    vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
+                    serviceWorkerRegistration: swReg
+                });
+
+                // 3. 새 이름 노드에 enabled: true 및 FCM 토큰 저장
+                await set(ref(db, `push_tokens/${newName}`), {
+                    token: currentToken || '',
+                    enabled: true, // 👈 토글이 켜져있으므로 반드시 true로 저장
+                    updatedAt: new Date().toISOString()
+                });
+                localStorage.setItem('duty_notification_enabled', 'true');
+                console.log(`[성공] 새 이름(${newName})으로 알림 동의(enabled: true) 설정 완`);
+            } else {
+                // 알림 권한이 꺼져있는 경우 토글도 비활성화
+                if (notificationToggle) notificationToggle.checked = false;
+                localStorage.setItem('duty_notification_enabled', 'false');
+            }
+        } catch (err) {
+            console.error("이름 저장 후 알림 상태 동기화 중 오류 발생:", err);
+        }
     }
 
     renderCalendar();
     renderDutyInfo();
     
     const feedback = document.getElementById('save-feedback');
-    feedback.classList.add('show');
-    setTimeout(() => feedback.classList.remove('show'), 2000);
+    if (feedback) {
+        feedback.classList.add('show');
+        setTimeout(() => feedback.classList.remove('show'), 2000);
+    }
 }
 
 window.addEventListener('load', () => {

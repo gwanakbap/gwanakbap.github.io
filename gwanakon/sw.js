@@ -1,7 +1,7 @@
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
-const STATIC_CACHE = 'gwanakon-cache-v1.2.d';
+const STATIC_CACHE = 'gwanakon-cache-v1.3';
 
 const ASSETS = [
   './',
@@ -26,13 +26,7 @@ const messaging = firebase.messaging();
 
 // 백그라운드에서 푸시 수신 시 동작
 messaging.onBackgroundMessage((payload) => {
-  const notificationTitle = payload.notification?.title || '과낙ON 당직 알림';
-  const notificationOptions = {
-    body: payload.notification?.body || '테스트.',
-    icon: './gwanakonIcon.png'
-  };
-
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  console.log('[sw.js] 백그라운드 푸시 수신:', payload);
 });
 
 self.addEventListener('install', event => {

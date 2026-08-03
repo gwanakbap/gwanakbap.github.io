@@ -1,4 +1,4 @@
-const admin = require('firebase-admin');
+import admin from 'firebase-admin';
 
 if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
   console.error("오류: FIREBASE_SERVICE_ACCOUNT 환경변수가 설정되지 않았습니다.");
@@ -15,13 +15,15 @@ admin.initializeApp({
 const db = admin.database();
 
 async function main() {
-  // 1. 한국 표준시(KST) 기준 오늘 연/월/일 구하기
+  // 1. 한국 표준시(KST) 기준 '내일' 연/월/일 구하기 [수정]
   const kstDate = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  kstDate.setDate(kstDate.getDate() + 1); // 👈 오늘 날짜에 +1일 추가
+
   const year = kstDate.getFullYear();
   const month = String(kstDate.getMonth() + 1).padStart(2, '0');
   const day = kstDate.getDate();
 
-  console.log(`[알림 스케줄러 시작] 대상 날짜(KST): ${year}-${month}-${day}`);
+  console.log(`[알림 스케줄러 시작] 대상 날짜(내일 KST): ${year}-${month}-${day}`);
 
   // 2. DB에서 당직 데이터 및 토큰 조회
   const dutyRef = db.ref(`gwanak-on/${year}-${month}`);
@@ -42,8 +44,8 @@ async function main() {
 
   const dutyList = Array.isArray(dutyRaw) ? dutyRaw : Object.values(dutyRaw);
 
-  // 3. 오늘 날짜 당직 데이터 필터링
-  const todayDuties = dutyList.filter(item => {
+  // 3. 내일 날짜 당직 데이터 필터링
+  const tomorrowDuties = dutyList.filter(item => {
     let dateStr = item["dateStr"] || "";
     if (!dateStr) {
       const foundKey = Object.keys(item).find(k => k.includes("당직상황근무지정"));
@@ -54,14 +56,14 @@ async function main() {
     return itemDay === day;
   });
 
-  if (todayDuties.length === 0) {
+  if (tomorrowDuties.length === 0) {
     console.log(`[종료] ${day}일 지정된 당직 정보가 없습니다.`);
     process.exit(0);
   }
 
-  // 4. 오늘 근무자 이름 및 근무 유형 추출
+  // 4. 내일 근무자 이름 및 근무 유형 추출
   const targets = [];
-  todayDuties.forEach(d => {
+  tomorrowDuties.forEach(d => {
     const shiftType = d["__EMPTY_8"] || d["shiftType"] || "당직";
     const leaderName = (d["__EMPTY_3"] || d["leaderName"] || "").replace(/\s/g, '');
     const worker1Name = (d["__EMPTY_5"] || d["worker1Name"] || "").replace(/\s/g, '');
@@ -72,7 +74,7 @@ async function main() {
     });
   });
 
-  console.log("오늘 근무 예정자:", targets);
+  console.log("내일 근무 예정자:", targets);
 
   // 5. 알림 수신을 허용한(enabled === true) 대상자만 메시지 구성
   const messages = [];
@@ -85,10 +87,13 @@ async function main() {
       messages.push({
         token: userTokenData.token,
         notification: {
-          title: `[과낙ON] 오늘 당직 안내 (${target.shiftType})`,
-          body: `${target.name}님, 오늘은 당직 근무일입니다. 근무 시간을 확인해주세요.`
+          title: '[당직 안내]', // 👈 문구 수정
+          body: `${target.name}님, 내일은 당직 근무일입니다. 근무 시간을 확인해 주세요.` // 👈 문구 수정
         },
         webpush: {
+          notification: {
+            icon: './gwanakonIcon.png' // 👈 서버에서 알림 아이콘 지정
+          },
           fcmOptions: {
             link: "./"
           }

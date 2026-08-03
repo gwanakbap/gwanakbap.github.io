@@ -2,8 +2,8 @@ name: Daily Duty Push Notification
 
 on:
   schedule:
-    # UTC 기준 23:00 = KST 기준 매일 오전 08:00 실행
-    - cron: '0 23 * * *'
+# UTC 기준 00:00 = KST(한국 시간) 기준 매일 오전 09:00 실행 [수정]
+    - cron: '0 0 * * *'
   # GitHub 화면에서 수동으로 실행해볼 수 있는 버튼 생성
   workflow_dispatch:
 
