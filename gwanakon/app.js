@@ -1,7 +1,6 @@
 if ('serviceWorker' in navigator) {
   let refreshing = false;
 
-  // 서비스 워커가 교체(controllerchange)되면 페이지 자동 새로고침
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!refreshing) {
       refreshing = true;
@@ -9,13 +8,12 @@ if ('serviceWorker' in navigator) {
     }
   });
 
-  // 서비스 워커 등록
   navigator.serviceWorker.register('./sw.js');
 }
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
+import { getDatabase, ref, onValue, set, update, get, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getMessaging, getToken, onMessage } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyDvEGZcUtz8PIyOLg9M_v71dL7aQG1ntwk",
@@ -29,8 +27,24 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-// [수정] Firebase Messaging 객체 정상 초기화
 const messaging = getMessaging(app);
+
+// Firebase RTDB 키 특수문자 변환 (. # $ [ ] /)
+function sanitizeKey(key) {
+  return (key || "").replace(/[.#$\[\]\/]/g, "_");
+}
+
+// [신규] 기기 고유 ID 생성 및 관리
+// - 기기별로 다른 FCM 토큰을 구분하기 위한 식별자
+// - 최초 접속 시 생성되어 localStorage에 영구 보관
+function getOrCreateDeviceId() {
+  let deviceId = localStorage.getItem('duty_device_id');
+  if (!deviceId) {
+    deviceId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('duty_device_id', deviceId);
+  }
+  return deviceId;
+}
 
 let dutyData = [];
 let lastRawDataJson = localStorage.getItem('duty_cached_data') || "";
@@ -53,41 +67,55 @@ const usernameInput = document.getElementById('username-input');
 const btnSaveUsername = document.getElementById('btn-save-username');
 const notificationToggle = document.getElementById('notification-toggle');
 
-usernameInput.value = currentUsername;
+if (usernameInput) usernameInput.value = currentUsername;
 
-document.getElementById('nav-btn-0').addEventListener('click', () => goToPage(0));
-document.getElementById('nav-btn-1').addEventListener('click', () => goToPage(1));
-document.getElementById('nav-btn-2').addEventListener('click', () => goToPage(2));
-btnSaveUsername.addEventListener('click', saveUsername);
+document.getElementById('nav-btn-0')?.addEventListener('click', () => goToPage(0));
+document.getElementById('nav-btn-1')?.addEventListener('click', () => goToPage(1));
+document.getElementById('nav-btn-2')?.addEventListener('click', () => goToPage(2));
+btnSaveUsername?.addEventListener('click', saveUsername);
 
-// [수정] 알림 토글 상태 관리 개선
+// 앱 오픈(Foreground) 중 알림 수신
+if (messaging) {
+  onMessage(messaging, (payload) => {
+    console.log('[Foreground Push Received]:', payload);
+    const title = payload.notification?.title || '[당직 안내]';
+    const body = payload.notification?.body || '새로운 알림이 도착했습니다.';
+    alert(`${title}\n\n${body}`);
+  });
+}
+
+// 알림 토글 스위치 이벤트
 if (notificationToggle) {
-    notificationToggle.addEventListener('change', async (e) => {
-        if (e.target.checked) {
-            await requestNotificationPermission();
-        } else {
-            await disableNotificationPermission();
-        }
-    });
-
-    if (Notification.permission === 'granted' && localStorage.getItem('duty_notification_enabled') === 'true') {
-        notificationToggle.checked = true;
+  notificationToggle.addEventListener('change', async (e) => {
+    if (e.target.checked) {
+      await requestNotificationPermission();
     } else {
-        notificationToggle.checked = false;
+      await disableNotificationPermission();
     }
+  });
+
+  if (Notification.permission === 'granted' && localStorage.getItem('duty_notification_enabled') === 'true') {
+    notificationToggle.checked = true;
+  } else {
+    notificationToggle.checked = false;
+  }
 }
 
 let currentIndex = 1;
 const totalPages = 3;
 
 function goToPage(index) {
-    if (index < 0 || index >= totalPages) return;
-    currentIndex = index;
-    const translateVal = -currentIndex * viewport.offsetWidth;
-    track.classList.remove('dragging');
-    track.style.transform = `translateX(${translateVal}px)`;
-    navItems.forEach((item, idx) => item.classList.toggle('active', idx === currentIndex));
+  if (index < 0 || index >= totalPages) return;
+  currentIndex = index;
+  const translateVal = -currentIndex * viewport.offsetWidth;
+  track.classList.remove('dragging');
+  track.style.transform = `translateX(${translateVal}px)`;
+  navItems.forEach((item, idx) => item.classList.toggle('active', idx === currentIndex));
 }
+
+window.addEventListener('resize', () => {
+  goToPage(currentIndex);
+});
 
 let startX = 0, startY = 0, currentTranslate = 0, prevTranslate = 0, isDragging = false, isHorizontalSwipe = null;
 
@@ -95,494 +123,620 @@ function getPositionX(e) { return e.type.includes('mouse') ? e.clientX : e.touch
 function getPositionY(e) { return e.type.includes('mouse') ? e.clientY : e.touches[0].clientY; }
 
 function touchStart(e) {
-    isDragging = true;
-    isHorizontalSwipe = null;
-    startX = getPositionX(e);
-    startY = getPositionY(e);
-    prevTranslate = -currentIndex * viewport.offsetWidth;
-    track.classList.add('dragging');
+  isDragging = true;
+  isHorizontalSwipe = null;
+  startX = getPositionX(e);
+  startY = getPositionY(e);
+  prevTranslate = -currentIndex * viewport.offsetWidth;
+  track.classList.add('dragging');
 }
 
 function touchMove(e) {
-    if (!isDragging) return;
-    const currentX = getPositionX(e);
-    const currentY = getPositionY(e);
-    const diffX = currentX - startX;
-    const diffY = currentY - startY;
+  if (!isDragging) return;
+  const currentX = getPositionX(e);
+  const currentY = getPositionY(e);
+  const diffX = currentX - startX;
+  const diffY = currentY - startY;
 
-    if (isHorizontalSwipe === null) {
-        if (Math.abs(diffX) > 8 || Math.abs(diffY) > 8) {
-            isHorizontalSwipe = Math.abs(diffX) > Math.abs(diffY);
-        }
+  if (isHorizontalSwipe === null) {
+    if (Math.abs(diffX) > 8 || Math.abs(diffY) > 8) {
+      isHorizontalSwipe = Math.abs(diffX) > Math.abs(diffY);
     }
+  }
 
-    if (isHorizontalSwipe === true) {
-        if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
-        let moveAmount = diffX;
-        if ((currentIndex === 0 && diffX > 0) || (currentIndex === totalPages - 1 && diffX < 0)) {
-            moveAmount = diffX * 0.3;
-        }
-        currentTranslate = prevTranslate + moveAmount;
-        track.style.transform = `translateX(${currentTranslate}px)`;
+  if (isHorizontalSwipe === true) {
+    if (e.cancelable && e.type.startsWith('touch')) e.preventDefault();
+    let moveAmount = diffX;
+    if ((currentIndex === 0 && diffX > 0) || (currentIndex === totalPages - 1 && diffX < 0)) {
+      moveAmount = diffX * 0.3;
     }
+    currentTranslate = prevTranslate + moveAmount;
+    track.style.transform = `translateX(${currentTranslate}px)`;
+  }
 }
 
 function touchEnd() {
-    if (!isDragging) return;
-    isDragging = false;
-    if (isHorizontalSwipe === true) {
-        const movedBy = currentTranslate - prevTranslate;
-        const threshold = viewport.offsetWidth * 0.2;
-        if (movedBy < -threshold && currentIndex < totalPages - 1) currentIndex += 1;
-        else if (movedBy > threshold && currentIndex > 0) currentIndex -= 1;
-    }
-    goToPage(currentIndex);
+  if (!isDragging) return;
+  isDragging = false;
+  if (isHorizontalSwipe === true) {
+    const movedBy = currentTranslate - prevTranslate;
+    const threshold = viewport.offsetWidth * 0.2;
+    if (movedBy < -threshold && currentIndex < totalPages - 1) currentIndex += 1;
+    else if (movedBy > threshold && currentIndex > 0) currentIndex -= 1;
+  }
+  goToPage(currentIndex);
 }
 
-viewport.addEventListener('touchstart', touchStart, { passive: false });
-viewport.addEventListener('touchmove', touchMove, { passive: false });
-viewport.addEventListener('touchend', touchEnd);
-viewport.addEventListener('mousedown', touchStart);
+if (viewport) {
+  viewport.addEventListener('touchstart', touchStart, { passive: false });
+  viewport.addEventListener('touchmove', touchMove, { passive: false });
+  viewport.addEventListener('touchend', touchEnd);
+  viewport.addEventListener('mousedown', touchStart);
+}
 window.addEventListener('mousemove', touchMove);
 window.addEventListener('mouseup', touchEnd);
 
-// [수정] 알림 동의 처리 및 토큰/수신상태 DB 저장
-async function requestNotificationPermission() {
-    if (!currentUsername) {
-        alert("이름을 먼저 등록하고 저장해 주세요.");
-        if (notificationToggle) notificationToggle.checked = false;
-        return false;
-    }
+// [수정] 동일한 FCM 토큰을 보유한 다른 기기/사용자의 DB 데이터 삭제
+// - keepSafeKey + keepDeviceId 조합에 해당하는 항목만 보존
+// - 구형(flat) 구조와 신형(nested) 구조 모두 처리
+async function cleanDuplicateTokens(targetToken, keepSafeKey, keepDeviceId) {
+  if (!targetToken) return;
+  try {
+    const snapshot = await get(ref(db, 'push_tokens'));
+    if (!snapshot.exists()) return;
 
-    try {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-            localStorage.setItem('duty_notification_enabled', 'true');
-            if (messaging) {
-                const swReg = await navigator.serviceWorker.ready;
-                const currentToken = await getToken(messaging, { 
-                    vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
-                    serviceWorkerRegistration: swReg
-                });
+    const updates = {};
+    snapshot.forEach((userSnap) => {
+      const userKey = userSnap.key;
+      const userData = userSnap.val();
+      if (!userData || typeof userData !== 'object') return;
 
-                if (currentToken) {
-                    await set(ref(db, `push_tokens/${currentUsername}`), {
-                        token: currentToken,
-                        enabled: true,
-                        updatedAt: new Date().toISOString()
-                    });
-                    console.log("FCM 토큰 및 수신 동의 DB 등록 성공");
-                    return true;
-                }
-            }
-        } else {
-            alert("알림 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요.");
-            if (notificationToggle) notificationToggle.checked = false;
-            await disableNotificationPermission();
-            return false;
+      // 구형(flat) 구조: push_tokens/{userKey} = { token, enabled, ... }
+      if (userData.token) {
+        if (userData.token === targetToken) {
+          updates[`push_tokens/${userKey}`] = null;
         }
-    } catch (err) {
-        console.error("FCM 토큰 획득/저장 실패:", err);
-        return false;
+        return;
+      }
+
+      // 신형(nested) 구조: push_tokens/{userKey}/{deviceId} = { token, enabled, ... }
+      userSnap.forEach((deviceSnap) => {
+        const deviceId = deviceSnap.key;
+        const deviceData = deviceSnap.val();
+        if (deviceData?.token === targetToken) {
+          if (userKey === keepSafeKey && deviceId === keepDeviceId) return; // 현재 기기 유지
+          updates[`push_tokens/${userKey}/${deviceId}`] = null;
+        }
+      });
+    });
+
+    if (Object.keys(updates).length > 0) {
+      await update(ref(db), updates);
+      console.log("동일 토큰을 가진 이전 노드 삭제 완료:", Object.keys(updates));
     }
+  } catch (err) {
+    console.error("중복 토큰 정리 중 오류 발생:", err);
+  }
 }
 
-// [신규] 알림 비활성화 처리 (DB 상태 변경)
-async function disableNotificationPermission() {
-    localStorage.setItem('duty_notification_enabled', 'false');
-    if (currentUsername) {
-        try {
-            await set(ref(db, `push_tokens/${currentUsername}/enabled`), false);
-            await set(ref(db, `push_tokens/${currentUsername}/updatedAt`), new Date().toISOString());
-            console.log("알림 비활성화 상태가 DB에 반영되었습니다.");
-        } catch (err) {
-            console.error("알림 비활성화 DB 반영 실패:", err);
+// [수정] 알림 동의 처리 및 토큰 등록
+// - DB 저장 경로: push_tokens/{safeKey}/{deviceId} (기기별 독립 저장)
+async function requestNotificationPermission() {
+  if (!currentUsername) {
+    alert("이름을 먼저 등록하고 저장해 주세요.");
+    if (notificationToggle) notificationToggle.checked = false;
+    return false;
+  }
+
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      localStorage.setItem('duty_notification_enabled', 'true');
+      if (messaging) {
+        const swReg = await navigator.serviceWorker.ready;
+        const currentToken = await getToken(messaging, {
+          vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
+          serviceWorkerRegistration: swReg
+        });
+
+        if (currentToken) {
+          const safeKey = sanitizeKey(currentUsername);
+          const deviceId = getOrCreateDeviceId();
+
+          // 현재 기기 토큰을 기기별 경로에 저장
+          await set(ref(db, `push_tokens/${safeKey}/${deviceId}`), {
+            token: currentToken,
+            enabled: true,
+            updatedAt: new Date().toISOString()
+          });
+
+          // 동일 토큰을 가진 다른 위치의 노드 삭제
+          await cleanDuplicateTokens(currentToken, safeKey, deviceId);
+
+          console.log("FCM 토큰 등록 및 중복 정리 완료");
+          return true;
         }
+      }
+    } else {
+      alert("알림 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요.");
+      if (notificationToggle) notificationToggle.checked = false;
+      await disableNotificationPermission();
+      return false;
     }
+  } catch (err) {
+    console.error("FCM 토큰 획득/저장 실패:", err);
+    if (notificationToggle) notificationToggle.checked = false;
+    return false;
+  }
+}
+
+// [수정] 알림 비활성화 처리
+// - 현재 기기(deviceId)의 토큰 데이터만 삭제 (다른 기기 토큰 유지)
+// - 구형 flat 구조 잔여 데이터도 현재 토큰 기준으로 함께 정리
+async function disableNotificationPermission() {
+  localStorage.setItem('duty_notification_enabled', 'false');
+
+  const deviceId = getOrCreateDeviceId();
+  let currentToken = null;
+
+  try {
+    if (messaging) {
+      const swReg = await navigator.serviceWorker.ready;
+      currentToken = await getToken(messaging, {
+        vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
+        serviceWorkerRegistration: swReg
+      });
+    }
+  } catch (e) {
+    // 토큰 조회 실패 시 무시
+  }
+
+  try {
+    const updates = {};
+
+    // 1. 현재 이름 + 현재 기기 ID 노드 삭제
+    if (currentUsername) {
+      const safeKey = sanitizeKey(currentUsername);
+      updates[`push_tokens/${safeKey}/${deviceId}`] = null;
+    }
+
+    // 2. 현재 토큰을 가진 다른 노드도 삭제 (구형 flat 구조 포함)
+    if (currentToken) {
+      const snapshot = await get(ref(db, 'push_tokens'));
+      if (snapshot.exists()) {
+        snapshot.forEach((userSnap) => {
+          const userKey = userSnap.key;
+          const userData = userSnap.val();
+          if (!userData) return;
+
+          // 구형 flat 구조
+          if (userData.token === currentToken) {
+            updates[`push_tokens/${userKey}`] = null;
+            return;
+          }
+
+          // 신형 nested 구조
+          if (typeof userData === 'object' && !userData.token) {
+            userSnap.forEach((deviceSnap) => {
+              if (deviceSnap.val()?.token === currentToken) {
+                updates[`push_tokens/${userKey}/${deviceSnap.key}`] = null;
+              }
+            });
+          }
+        });
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await update(ref(db), updates);
+      console.log("알림 비활성화: 현재 기기 토큰 데이터 삭제 완료");
+    }
+  } catch (err) {
+    console.error("알림 비활성화 데이터 삭제 실패:", err);
+  }
 }
 
 function processRawData(rawData) {
-    if (!rawData) return { list: [], rawHeader: '' };
-    const list = Array.isArray(rawData) ? rawData : Object.values(rawData);
-    let extractedHeader = '';
+  if (!rawData) return { list: [], rawHeader: '' };
+  const list = Array.isArray(rawData) ? rawData : Object.values(rawData);
+  let extractedHeader = '';
 
-    const processedList = list.map(item => {
-        let dateStr = item["dateStr"] || "";
-        if (!dateStr) {
-            const foundKey = Object.keys(item).find(k => k.includes("당직상황근무지정"));
-            if (foundKey) {
-                dateStr = item[foundKey];
-                if (!extractedHeader) extractedHeader = foundKey;
-            }
-        }
+  const processedList = list.map(item => {
+    let dateStr = item["dateStr"] || "";
+    if (!dateStr) {
+      const foundKey = Object.keys(item).find(k => k.includes("당직상황근무지정"));
+      if (foundKey) {
+        dateStr = item[foundKey];
+        if (!extractedHeader) extractedHeader = foundKey;
+      }
+    }
 
-        const parts = dateStr.split('/');
-        const day = parts.length > 1 ? parseInt(parts[1], 10) : 0;
-        
-        return {
-            dateStr: dateStr,
-            day: day,
-            dayOfWeek: item["__EMPTY"] || item["dayOfWeek"] || "",
-            isHoliday: (item["__EMPTY_1"] === "공휴일") || item["isHoliday"] === true,
-            leaderRank: item["__EMPTY_2"] || item["leaderRank"] || "",
-            leaderName: (item["__EMPTY_3"] || item["leaderName"] || "").replace(/\s/g, ''),
-            worker1Rank: item["__EMPTY_4"] || item["worker1Rank"] || "",
-            worker1Name: (item["__EMPTY_5"] || item["worker1Name"] || "").replace(/\s/g, ''),
-            worker2Rank: item["__EMPTY_6"] || item["worker2Rank"] || "",
-            worker2Name: (item["__EMPTY_7"] || item["worker2Name"] || "").replace(/\s/g, ''),
-            shiftType: item["__EMPTY_8"] || item["shiftType"] || "",
-            note: item["__EMPTY_9"] || item["note"] || ""
-        };
-    });
+    const parts = dateStr.split('/');
+    const day = parts.length > 1 ? parseInt(parts[1], 10) : 0;
 
-    return { list: processedList, rawHeader: extractedHeader };
+    return {
+      dateStr: dateStr,
+      day: day,
+      dayOfWeek: item["__EMPTY"] || item["dayOfWeek"] || "",
+      isHoliday: (item["__EMPTY_1"] === "공휴일") || item["isHoliday"] === true,
+      leaderRank: item["__EMPTY_2"] || item["leaderRank"] || "",
+      leaderName: (item["__EMPTY_3"] || item["leaderName"] || "").replace(/\s/g, ''),
+      worker1Rank: item["__EMPTY_4"] || item["worker1Rank"] || "",
+      worker1Name: (item["__EMPTY_5"] || item["worker1Name"] || "").replace(/\s/g, ''),
+      worker2Rank: item["__EMPTY_6"] || item["worker2Rank"] || "",
+      worker2Name: (item["__EMPTY_7"] || item["worker2Name"] || "").replace(/\s/g, ''),
+      shiftType: item["__EMPTY_8"] || item["shiftType"] || "",
+      note: item["__EMPTY_9"] || item["note"] || ""
+    };
+  });
+
+  return { list: processedList, rawHeader: extractedHeader };
 }
 
 function applyDataToUI(list, rawHeader) {
-    dutyData = list;
-    
-    const headerMatch = rawHeader.match(/(\d+)월/);
-    if (headerMatch) {
-        targetMonth = parseInt(headerMatch[1], 10);
-        
-        if (todayMonth === 12 && targetMonth === 1) targetYear = todayYear + 1;
-        else if (todayMonth === 1 && targetMonth === 12) targetYear = todayYear - 1;
-        else targetYear = todayYear;
-    } else {
-        targetMonth = todayMonth;
-        targetYear = todayYear;
-    }
+  dutyData = list;
 
-    if (targetYear === todayYear && targetMonth === todayMonth) {
-        selectedDay = todayDay;
-    } else {
-        selectedDay = 1;
-    }
+  const headerMatch = rawHeader.match(/(\d+)월/);
+  if (headerMatch) {
+    targetMonth = parseInt(headerMatch[1], 10);
 
-    document.getElementById('app-header').innerText = rawHeader || `당직상황근무지정 ${targetMonth}월`;
-    document.getElementById('calendar-title').innerText = `${targetYear}년 ${targetMonth}월`;
+    if (todayMonth === 12 && targetMonth === 1) targetYear = todayYear + 1;
+    else if (todayMonth === 1 && targetMonth === 12) targetYear = todayYear - 1;
+    else targetYear = todayYear;
+  } else {
+    targetMonth = todayMonth;
+    targetYear = todayYear;
+  }
 
-    renderCalendar();
-    renderDutyInfo();
+  if (targetYear === todayYear && targetMonth === todayMonth) {
+    selectedDay = todayDay;
+  } else {
+    selectedDay = 1;
+  }
+
+  const headerElem = document.getElementById('app-header');
+  const titleElem = document.getElementById('calendar-title');
+  if (headerElem) headerElem.innerText = rawHeader || `당직상황근무지정 ${targetMonth}월`;
+  if (titleElem) titleElem.innerText = `${targetYear}년 ${targetMonth}월`;
+
+  renderCalendar();
+  renderDutyInfo();
 }
 
 if (lastRawDataJson) {
-    try {
-        const cachedVal = JSON.parse(lastRawDataJson);
-        const { list, rawHeader } = processRawData(cachedVal);
-        applyDataToUI(list, rawHeader);
-    } catch (e) {
-        console.error(e);
-    }
+  try {
+    const cachedVal = JSON.parse(lastRawDataJson);
+    const { list, rawHeader } = processRawData(cachedVal);
+    applyDataToUI(list, rawHeader);
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 const currentYearStr = String(todayYear);
 const currentMonthStr = String(todayMonth).padStart(2, '0');
 const dbPath = `gwanak-on/${currentYearStr}-${currentMonthStr}`;
 
-console.log(`[DB 연결] 대상 경로: ${dbPath}`);
 const dbRef = ref(db, dbPath);
 
 onValue(dbRef, (snapshot) => {
-    const val = snapshot.val();
-    
-    if (!val) {
-        console.log("해당 월의 당직 데이터가 없습니다.");
-        lastRawDataJson = "";
-        localStorage.removeItem('duty_cached_data');
-        
-        applyDataToUI([], "");
-        document.getElementById('app-header').innerText = `${todayYear}년 ${todayMonth}월 (업데이트 예정)`;
-        return;
-    }
+  const val = snapshot.val();
 
-    const currentRawDataJson = JSON.stringify(val);
-    
-    if (currentRawDataJson === lastRawDataJson) {
-        return;
-    }
+  if (!val) {
+    lastRawDataJson = "";
+    localStorage.removeItem('duty_cached_data');
+    applyDataToUI([], "");
+    const headerElem = document.getElementById('app-header');
+    if (headerElem) headerElem.innerText = `${todayYear}년 ${todayMonth}월 (업데이트 예정)`;
+    return;
+  }
 
-    lastRawDataJson = currentRawDataJson;
-    localStorage.setItem('duty_cached_data', currentRawDataJson);
-    
-    const { list, rawHeader } = processRawData(val);
-    applyDataToUI(list, rawHeader);
-    console.log("새로운 데이터가 감지되어 UI를 갱신하였습니다.");
+  const currentRawDataJson = JSON.stringify(val);
+  if (currentRawDataJson === lastRawDataJson) return;
+
+  lastRawDataJson = currentRawDataJson;
+  localStorage.setItem('duty_cached_data', currentRawDataJson);
+
+  const { list, rawHeader } = processRawData(val);
+  applyDataToUI(list, rawHeader);
 });
 
 function renderCalendar() {
-    const grid = document.getElementById('calendar-grid');
-    let gridHTML = `
-        <div class="day-header sun">일</div><div class="day-header">월</div><div class="day-header">화</div>
-        <div class="day-header">수</div><div class="day-header">목</div><div class="day-header">금</div>
-        <div class="day-header sat">토</div>
-    `;
+  const grid = document.getElementById('calendar-grid');
+  if (!grid) return;
 
-    const firstDayObj = new Date(targetYear, targetMonth - 1, 1);
-    const lastDayObj = new Date(targetYear, targetMonth, 0);
-    
-    const firstDayIndex = firstDayObj.getDay();
-    const totalDays = lastDayObj.getDate();
-    const prevMonthLastDay = new Date(targetYear, targetMonth - 1, 0).getDate();
+  let gridHTML = `
+    <div class="day-header sun">일</div><div class="day-header">월</div><div class="day-header">화</div>
+    <div class="day-header">수</div><div class="day-header">목</div><div class="day-header">금</div>
+    <div class="day-header sat">토</div>
+  `;
 
-    for (let i = 0; i < firstDayIndex; i++) {
-        const emptyDayNum = prevMonthLastDay - firstDayIndex + 1 + i;
-        gridHTML += `<div class="day-cell other-month"><span class="day-num">${emptyDayNum}</span></div>`;
-    }
+  const firstDayObj = new Date(targetYear, targetMonth - 1, 1);
+  const lastDayObj = new Date(targetYear, targetMonth, 0);
 
-    for (let day = 1; day <= totalDays; day++) {
-        const dayDuties = dutyData.filter(d => d.day === day);
-        const isToday = (targetYear === todayYear && targetMonth === todayMonth && day === todayDay);
-        const dayOfWeekIdx = (firstDayIndex + day - 1) % 7;
-        const isHoliday = dayDuties.some(d => d.isHoliday);
+  const firstDayIndex = firstDayObj.getDay();
+  const totalDays = lastDayObj.getDate();
+  const prevMonthLastDay = new Date(targetYear, targetMonth - 1, 0).getDate();
 
-        let dayClass = "";
-        if (dayOfWeekIdx === 0 || isHoliday) dayClass = "sun";
-        else if (dayOfWeekIdx === 6) dayClass = "sat";
+  for (let i = 0; i < firstDayIndex; i++) {
+    const emptyDayNum = prevMonthLastDay - firstDayIndex + 1 + i;
+    gridHTML += `<div class="day-cell other-month"><span class="day-num">${emptyDayNum}</span></div>`;
+  }
 
-        let dutyBadgesHTML = "";
-        dayDuties.forEach(d => {
-            if (d.shiftType) {
-                let shiftClass = "";
-                if (d.shiftType.includes("일직")) shiftClass = "shift-day";
-                else if (d.shiftType.includes("숙직")) shiftClass = "shift-night";
-                
-                dutyBadgesHTML += `<span class="duty-badge ${shiftClass}">[${d.shiftType}]</span>`;
-            }
-            [d.leaderName, d.worker1Name, d.worker2Name].forEach(name => {
-                if (!name) return;
-                const isMe = name === currentUsername;
-                dutyBadgesHTML += `<span class="duty-badge ${isMe ? 'my-duty' : ''}">${name}</span>`;
-            });
-        });
+  for (let day = 1; day <= totalDays; day++) {
+    const dayDuties = dutyData.filter(d => d.day === day);
+    const isToday = (targetYear === todayYear && targetMonth === todayMonth && day === todayDay);
+    const dayOfWeekIdx = (firstDayIndex + day - 1) % 7;
+    const isHoliday = dayDuties.some(d => d.isHoliday);
 
-        gridHTML += `
-            <div class="day-cell ${dayClass} ${isToday ? 'today' : ''}" data-day="${day}">
-                <span class="day-num">${day}</span>
-                <div class="duty-list">${dutyBadgesHTML}</div>
-            </div>
-        `;
-    }
+    let dayClass = "";
+    if (dayOfWeekIdx === 0 || isHoliday) dayClass = "sun";
+    else if (dayOfWeekIdx === 6) dayClass = "sat";
 
-    const totalCells = firstDayIndex + totalDays;
-    const remainingCells = (7 - (totalCells % 7)) % 7;
-    for (let i = 1; i <= remainingCells; i++) {
-        gridHTML += `<div class="day-cell other-month"><span class="day-num">${i}</span></div>`;
-    }
+    let dutyBadgesHTML = "";
+    dayDuties.forEach(d => {
+      if (d.shiftType) {
+        let shiftClass = "";
+        if (d.shiftType.includes("일직")) shiftClass = "shift-day";
+        else if (d.shiftType.includes("숙직")) shiftClass = "shift-night";
 
-    grid.innerHTML = gridHTML;
-
-    grid.querySelectorAll('.day-cell[data-day]').forEach(cell => {
-        cell.addEventListener('click', () => {
-            selectedDay = parseInt(cell.getAttribute('data-day'), 10);
-            renderDutyInfo();
-            goToPage(1);
-        });
+        dutyBadgesHTML += `<span class="duty-badge ${shiftClass}">[${d.shiftType}]</span>`;
+      }
+      [d.leaderName, d.worker1Name, d.worker2Name].forEach(name => {
+        if (!name) return;
+        const isMe = name === currentUsername;
+        dutyBadgesHTML += `<span class="duty-badge ${isMe ? 'my-duty' : ''}">${name}</span>`;
+      });
     });
+
+    gridHTML += `
+      <div class="day-cell ${dayClass} ${isToday ? 'today' : ''}" data-day="${day}">
+        <span class="day-num">${day}</span>
+        <div class="duty-list">${dutyBadgesHTML}</div>
+      </div>
+    `;
+  }
+
+  const totalCells = firstDayIndex + totalDays;
+  const remainingCells = (7 - (totalCells % 7)) % 7;
+  for (let i = 1; i <= remainingCells; i++) {
+    gridHTML += `<div class="day-cell other-month"><span class="day-num">${i}</span></div>`;
+  }
+
+  grid.innerHTML = gridHTML;
+
+  grid.querySelectorAll('.day-cell[data-day]').forEach(cell => {
+    cell.addEventListener('click', () => {
+      selectedDay = parseInt(cell.getAttribute('data-day'), 10);
+      renderDutyInfo();
+      goToPage(1);
+    });
+  });
 }
 
 window.changeDay = function(delta) {
-    const maxDays = new Date(targetYear, targetMonth, 0).getDate();
-    const nextDay = selectedDay + delta;
-    
-    if (nextDay >= 1 && nextDay <= maxDays) {
-        selectedDay = nextDay;
-        renderDutyInfo();
-    }
+  const maxDays = new Date(targetYear, targetMonth, 0).getDate();
+  const nextDay = selectedDay + delta;
+  if (nextDay >= 1 && nextDay <= maxDays) {
+    selectedDay = nextDay;
+    renderDutyInfo();
+  }
 };
 
 function renderDutyInfo() {
-    const currentDataList = dutyData.filter(d => d.day === selectedDay);
-    const todayCard = document.getElementById('today-card');
+  const currentDataList = dutyData.filter(d => d.day === selectedDay);
+  const todayCard = document.getElementById('today-card');
 
-    const targetDateObj = new Date(targetYear, targetMonth - 1, selectedDay);
-    const currentDayOfWeekStr = weekDays[targetDateObj.getDay()];
-    
-    const isToday = (targetYear === todayYear && targetMonth === todayMonth && selectedDay === todayDay);
-    const isHoliday = currentDataList.some(d => d.isHoliday);
+  const targetDateObj = new Date(targetYear, targetMonth - 1, selectedDay);
+  const currentDayOfWeekStr = weekDays[targetDateObj.getDay()];
 
-    let shiftsHTML = "";
+  const isToday = (targetYear === todayYear && targetMonth === todayMonth && selectedDay === todayDay);
+  const isHoliday = currentDataList.some(d => d.isHoliday);
 
-    if (currentDataList.length > 0) {
-        currentDataList.forEach(d => {
-            const shiftTitle = d.shiftType || "당직";
-            
-            let badgeClass = "";
-            if (shiftTitle.includes("일직")) badgeClass = "day";
-            else if (shiftTitle.includes("숙직")) badgeClass = "night";
+  let shiftsHTML = "";
 
-            let workersHTML = "";
-            if (d.worker1Name && d.worker2Name) {
-                workersHTML = `${d.worker1Name} <span class="rank">(${d.worker1Rank})</span>&nbsp;&nbsp;${d.worker2Name} <span class="rank">(${d.worker2Rank})</span>`;
-            } else if (d.worker1Name) {
-                workersHTML = `${d.worker1Name} <span class="rank">(${d.worker1Rank})</span>`;
-            } else if (d.worker2Name) {
-                workersHTML = `${d.worker2Name} <span class="rank">(${d.worker2Rank})</span>`;
-            } else {
-                workersHTML = "-";
-            }
+  if (currentDataList.length > 0) {
+    currentDataList.forEach(d => {
+      const shiftTitle = d.shiftType || "당직";
+      let badgeClass = "";
+      if (shiftTitle.includes("일직")) badgeClass = "day";
+      else if (shiftTitle.includes("숙직")) badgeClass = "night";
 
-            shiftsHTML += `
-                <div class="shift-section">
-                    <div class="shift-header"><span class="shift-badge ${badgeClass}">${shiftTitle}</span></div>
-                    <div class="duty-row"><div class="duty-role">상황책임관</div><div class="duty-name">${d.leaderName ? `${d.leaderName} <span class="rank">(${d.leaderRank})</span>` : '-'}</div></div>
-                    <div class="duty-row"><div class="duty-role">상황근무자</div><div class="duty-name">${workersHTML}</div></div>
-                </div>
-            `;
-        });
-    } else {
-        shiftsHTML = `<p style="color:var(--text-sub); font-size:14px; padding: 12px 0; text-align: center;">지정된 근무 데이터가 없습니다.</p>`;
-    }
+      let workersHTML = "";
+      if (d.worker1Name && d.worker2Name) {
+        workersHTML = `${d.worker1Name} <span class="rank">(${d.worker1Rank})</span>&nbsp;&nbsp;${d.worker2Name} <span class="rank">(${d.worker2Rank})</span>`;
+      } else if (d.worker1Name) {
+        workersHTML = `${d.worker1Name} <span class="rank">(${d.worker1Rank})</span>`;
+      } else if (d.worker2Name) {
+        workersHTML = `${d.worker2Name} <span class="rank">(${d.worker2Rank})</span>`;
+      } else {
+        workersHTML = "-";
+      }
 
-    todayCard.innerHTML = `
-        <div class="date-nav-header">
-            <button class="date-btn" onclick="changeDay(-1)">‹</button>
-            <div class="greeting">
-                ${targetMonth}월 ${selectedDay}일 (${currentDataList[0]?.dayOfWeek || currentDayOfWeekStr})
-                ${isToday ? '<span class="today-tag">오늘</span>' : ''}
-                ${isHoliday ? '<span class="holiday">(공휴일)</span>' : ''}
-            </div>
-            <button class="date-btn" onclick="changeDay(1)">›</button>
+      shiftsHTML += `
+        <div class="shift-section">
+          <div class="shift-header"><span class="shift-badge ${badgeClass}">${shiftTitle}</span></div>
+          <div class="duty-row"><div class="duty-role">상황책임관</div><div class="duty-name">${d.leaderName ? `${d.leaderName} <span class="rank">(${d.leaderRank})</span>` : '-'}</div></div>
+          <div class="duty-row"><div class="duty-role">상황근무자</div><div class="duty-name">${workersHTML}</div></div>
         </div>
-        ${shiftsHTML}
+      `;
+    });
+  } else {
+    shiftsHTML = `<p style="color:var(--text-sub); font-size:14px; padding: 12px 0; text-align: center;">지정된 근무 데이터가 없습니다.</p>`;
+  }
+
+  if (todayCard) {
+    todayCard.innerHTML = `
+      <div class="date-nav-header">
+        <button class="date-btn" onclick="changeDay(-1)">‹</button>
+        <div class="greeting">
+          ${targetMonth}월 ${selectedDay}일 (${currentDataList[0]?.dayOfWeek || currentDayOfWeekStr})
+          ${isToday ? '<span class="today-tag">오늘</span>' : ''}
+          ${isHoliday ? '<span class="holiday">(공휴일)</span>' : ''}
+        </div>
+        <button class="date-btn" onclick="changeDay(1)">›</button>
+      </div>
+      ${shiftsHTML}
     `;
+  }
 
-    const nextDutyCard = document.getElementById('next-duty-card');
+  const nextDutyCard = document.getElementById('next-duty-card');
 
+  if (nextDutyCard) {
     if (!currentUsername) {
-        nextDutyCard.innerHTML = `
-            <div class="card-title">다음 당직 안내</div>
-            <div class="duty-info" style="flex-direction: column; align-items: center; justify-content: center; padding: 10px 0;">
-                <p style="color:var(--text-sub); font-size:14px; text-align:center; margin: 0 0 15px 0; line-height: 1.4;">
-                    설정에서 본인의 이름을 등록하시면<br>다음 당직일까지 남은 날짜를 알려드립니다.
-                </p>
-                <button class="btn-save" style="width: auto; padding: 8px 20px; font-size: 14px; border-radius: 20px; cursor: pointer;" onclick="document.getElementById('nav-btn-2').click()">
-                    ⚙️ 이름 설정하러 가기
-                </button>
-            </div>
-        `;
+      nextDutyCard.innerHTML = `
+        <div class="card-title">다음 당직 안내</div>
+        <div class="duty-info" style="flex-direction: column; align-items: center; justify-content: center; padding: 10px 0;">
+          <p style="color:var(--text-sub); font-size:14px; text-align:center; margin: 0 0 15px 0; line-height: 1.4;">
+            설정에서 본인의 이름을 등록하시면<br>다음 당직일까지 남은 날짜를 알려드립니다.
+          </p>
+          <button class="btn-save" style="width: auto; padding: 8px 20px; font-size: 14px; border-radius: 20px; cursor: pointer;" onclick="document.getElementById('nav-btn-2')?.click()">
+            ⚙️ 이름 설정하러 가기
+          </button>
+        </div>
+      `;
     } else {
-        const todayTime = new Date(todayYear, todayMonth - 1, todayDay).getTime();
-        
-        const upcomingDuties = dutyData.filter(d => {
-            const dutyTime = new Date(targetYear, targetMonth - 1, d.day).getTime();
-            return dutyTime >= todayTime && 
-                   (d.leaderName === currentUsername || d.worker1Name === currentUsername || d.worker2Name === currentUsername);
-        });
+      const todayTime = new Date(todayYear, todayMonth - 1, todayDay).getTime();
+      const upcomingDuties = dutyData.filter(d => {
+        const dutyTime = new Date(targetYear, targetMonth - 1, d.day).getTime();
+        return dutyTime >= todayTime &&
+               (d.leaderName === currentUsername || d.worker1Name === currentUsername || d.worker2Name === currentUsername);
+      });
 
-        upcomingDuties.sort((a, b) => a.day - b.day);
-        const myNextDuty = upcomingDuties.length > 0 ? upcomingDuties[0] : null;
+      upcomingDuties.sort((a, b) => a.day - b.day);
+      const myNextDuty = upcomingDuties.length > 0 ? upcomingDuties[0] : null;
 
-        let nextDutyHTML = `
-            <div class="card-title">다음 <span>${currentUsername}</span> 님의 당직</div>
-            <div class="duty-info">
+      let nextDutyHTML = `
+        <div class="card-title">다음 <span>${currentUsername}</span> 님의 당직</div>
+        <div class="duty-info">
+      `;
+
+      if (myNextDuty) {
+        const shiftLabel = myNextDuty.shiftType ? ` (${myNextDuty.shiftType})` : '';
+        const nextDutyDateObj = new Date(targetYear, targetMonth - 1, myNextDuty.day);
+        const dDayMs = nextDutyDateObj.getTime() - todayTime;
+        const dDayVal = Math.round(dDayMs / (1000 * 60 * 60 * 24));
+
+        nextDutyHTML += `
+          <div class="duty-date">${targetMonth}월 ${myNextDuty.day}일 (${myNextDuty.dayOfWeek || weekDays[nextDutyDateObj.getDay()]})${shiftLabel}</div>
+          <div class="d-day">${dDayVal === 0 ? "D-Day" : `D-${dDayVal}`}</div>
         `;
+      } else {
+        nextDutyHTML += `
+          <div class="duty-date">일정 없음</div>
+          <div class="d-day">D--</div>
+        `;
+      }
 
-        if (myNextDuty) {
-            const shiftLabel = myNextDuty.shiftType ? ` (${myNextDuty.shiftType})` : '';
-            const nextDutyDateObj = new Date(targetYear, targetMonth - 1, myNextDuty.day);
-            const dDayMs = nextDutyDateObj.getTime() - todayTime;
-            const dDayVal = Math.ceil(dDayMs / (1000 * 60 * 60 * 24));
-            
-            nextDutyHTML += `
-                <div class="duty-date">${targetMonth}월 ${myNextDuty.day}일 (${myNextDuty.dayOfWeek || weekDays[nextDutyDateObj.getDay()]})${shiftLabel}</div>
-                <div class="d-day">${dDayVal === 0 ? "D-Day" : `D-${dDayVal}`}</div>
-            `;
-        } else {
-            nextDutyHTML += `
-                <div class="duty-date">일정 없음</div>
-                <div class="d-day">D--</div>
-            `;
-        }
-        
-        nextDutyHTML += `</div>`;
-        nextDutyCard.innerHTML = nextDutyHTML;
+      nextDutyHTML += `</div>`;
+      nextDutyCard.innerHTML = nextDutyHTML;
     }
+  }
 }
 
-// [수정] 이름 변경 및 저장 시 DB 토큰 매핑 갱신
+// [수정] 이름 저장 로직
+// - 이름 변경 시 현재 기기의 구 이름 노드만 삭제 (다른 기기 데이터 보존)
+// - 새 이름으로 현재 기기 토큰을 기기별 경로에 등록
 async function saveUsername() {
-    const input = document.getElementById('username-input');
-    const newName = input.value.trim();
+  const input = document.getElementById('username-input');
+  if (!input) return;
 
-    if (!newName) {
-        alert('이름을 입력해 주세요.');
-        input.focus();
-        return;
+  const newName = input.value.trim();
+  if (!newName) {
+    alert('이름을 입력해 주세요.');
+    input.focus();
+    return;
+  }
+
+  const oldName = currentUsername;
+  currentUsername = newName;
+  localStorage.setItem('duty_app_username', newName);
+
+  const isNotificationEnabled = notificationToggle && notificationToggle.checked;
+  const deviceId = getOrCreateDeviceId();
+
+  try {
+    // 1. 이름이 변경된 경우 기존 이름의 현재 기기 노드만 삭제
+    if (oldName && oldName !== newName) {
+      const oldSafeKey = sanitizeKey(oldName);
+      await remove(ref(db, `push_tokens/${oldSafeKey}/${deviceId}`));
     }
 
-    const oldName = currentUsername;
-    currentUsername = newName;
-    localStorage.setItem('duty_app_username', newName);
-
-    // 알림 토글이 켜져 있는 상태라면 DB 상태 동기화 진행
-    const isNotificationEnabled = notificationToggle && notificationToggle.checked;
-
+    // 2. 알림 설정 ON 상태일 경우 새 이름으로 토큰 등록
     if (isNotificationEnabled) {
-        try {
-            // 1. 기존 이름 노드의 enabled 상태를 false로 안전하게 변경 (기존 이름이 다른 경우)
-            if (oldName && oldName !== newName) {
-                await set(ref(db, `push_tokens/${oldName}/enabled`), false);
-            }
+      if (Notification.permission === 'granted') {
+        const swReg = await navigator.serviceWorker.ready;
+        const currentToken = await getToken(messaging, {
+          vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
+          serviceWorkerRegistration: swReg
+        });
 
-            // 2. 현재 브라우저 알림 권한 상태 체크
-            if (Notification.permission === 'granted') {
-                const swReg = await navigator.serviceWorker.ready;
-                const currentToken = await getToken(messaging, { 
-                    vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
-                    serviceWorkerRegistration: swReg
-                });
+        if (currentToken) {
+          const newSafeKey = sanitizeKey(newName);
 
-                // 3. 새 이름 노드에 enabled: true 및 FCM 토큰 저장
-                await set(ref(db, `push_tokens/${newName}`), {
-                    token: currentToken || '',
-                    enabled: true, // 👈 토글이 켜져있으므로 반드시 true로 저장
-                    updatedAt: new Date().toISOString()
-                });
-                localStorage.setItem('duty_notification_enabled', 'true');
-                console.log(`[성공] 새 이름(${newName})으로 알림 동의(enabled: true) 설정 완`);
-            } else {
-                // 알림 권한이 꺼져있는 경우 토글도 비활성화
-                if (notificationToggle) notificationToggle.checked = false;
-                localStorage.setItem('duty_notification_enabled', 'false');
-            }
-        } catch (err) {
-            console.error("이름 저장 후 알림 상태 동기화 중 오류 발생:", err);
+          // 새 이름 + 현재 기기 ID로 토큰 등록
+          await set(ref(db, `push_tokens/${newSafeKey}/${deviceId}`), {
+            token: currentToken,
+            enabled: true,
+            updatedAt: new Date().toISOString()
+          });
+
+          // 동일한 토큰을 가지는 다른 모든 노드 삭제
+          await cleanDuplicateTokens(currentToken, newSafeKey, deviceId);
+
+          localStorage.setItem('duty_notification_enabled', 'true');
+          console.log(`[성공] 새 이름(${newName})으로 토큰 저장 및 중복 토큰 정리 완료`);
         }
+      } else {
+        if (notificationToggle) notificationToggle.checked = false;
+        await disableNotificationPermission();
+      }
+    } else {
+      // 3. 알림 설정 OFF 상태일 경우 현재 기기의 토큰 데이터 삭제
+      await disableNotificationPermission();
     }
+  } catch (err) {
+    console.error("이름 저장 후 알림 처리 중 오류 발생:", err);
+  }
 
-    renderCalendar();
-    renderDutyInfo();
-    
-    const feedback = document.getElementById('save-feedback');
-    if (feedback) {
-        feedback.classList.add('show');
-        setTimeout(() => feedback.classList.remove('show'), 2000);
-    }
+  renderCalendar();
+  renderDutyInfo();
+
+  const feedback = document.getElementById('save-feedback');
+  if (feedback) {
+    feedback.classList.add('show');
+    setTimeout(() => feedback.classList.remove('show'), 2000);
+  }
 }
 
 window.addEventListener('load', () => {
-    track.style.transition = 'none'; 
-    goToPage(1); 
-    
+  if (track) {
+    track.style.transition = 'none';
+    goToPage(1);
+
     requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-            track.style.transition = ''; 
-        });
+      requestAnimationFrame(() => {
+        track.style.transition = '';
+      });
     });
+  }
 });
 
 let deferredPrompt;
 const installBtn = document.getElementById('install-btn');
 
 window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    if(deferredPrompt) installBtn.style.display = 'block';
+  e.preventDefault();
+  deferredPrompt = e;
+  if (deferredPrompt && installBtn) installBtn.style.display = 'block';
 });
 
-installBtn.addEventListener('click', async () => {
-    deferredPrompt.prompt();
-    deferredPrompt = null;
-    installBtn.style.display = 'none';
-});
+if (installBtn) {
+  installBtn.addEventListener('click', async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt = null;
+      installBtn.style.display = 'none';
+    }
+  });
+}
