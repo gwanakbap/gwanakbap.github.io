@@ -634,7 +634,17 @@ function renderDutyInfo() {
   }
 }
 
+// 금월 당직 데이터에 해당 이름이 존재하는지 확인
+function isNameInDutyData(name) {
+  return dutyData.some(d =>
+    d.leaderName === name ||
+    d.worker1Name === name ||
+    d.worker2Name === name
+  );
+}
+
 // [수정] 이름 저장 로직
+// - 금월 당직 데이터에 없는 이름은 저장 불가
 // - 이름 변경 시 현재 기기의 구 이름 노드만 삭제 (다른 기기 데이터 보존)
 // - 새 이름으로 현재 기기 토큰을 기기별 경로에 등록
 async function saveUsername() {
@@ -644,6 +654,19 @@ async function saveUsername() {
   const newName = input.value.trim();
   if (!newName) {
     alert('이름을 입력해 주세요.');
+    input.focus();
+    return;
+  }
+
+  // 금월 데이터 로드 여부 확인
+  if (dutyData.length === 0) {
+    alert('당직 데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
+    return;
+  }
+
+  // 금월 당직 명단에 없는 이름 차단
+  if (!isNameInDutyData(newName)) {
+    alert(`'${newName}'은(는) 이번 달 당직 명단에 없는 이름입니다.\n정확한 이름을 입력해 주세요.`);
     input.focus();
     return;
   }
