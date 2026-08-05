@@ -1,14 +1,26 @@
 if ('serviceWorker' in navigator) {
-  let refreshing = false;
+  let swRegistration;
 
+  // 1. 서비스 워커 등록 및 객체 저장
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    swRegistration = reg;
+  });
+
+  // 2. 백그라운드 -> 포그라운드 복귀 시 즉시 서버의 sw.js 업데이트 체크
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && swRegistration) {
+      swRegistration.update();
+    }
+  });
+
+  // 3. 새 서비스 워커가 제어권을 잡으면(controllerchange) 화면 즉시 새로고침
+  let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!refreshing) {
       refreshing = true;
       window.location.reload();
     }
   });
-
-  navigator.serviceWorker.register('./sw.js');
 }
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
