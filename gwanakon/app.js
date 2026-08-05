@@ -29,6 +29,9 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const messaging = getMessaging(app);
 
+// iOS Safari는 Notification API 자체가 없으므로 존재 여부를 먼저 확인
+const notifSupported = typeof Notification !== 'undefined';
+
 // Firebase RTDB 키 특수문자 변환 (. # $ [ ] /)
 function sanitizeKey(key) {
   return (key || "").replace(/[.#$\[\]\/]/g, "_");
@@ -86,18 +89,24 @@ if (messaging) {
 
 // 알림 토글 스위치 이벤트
 if (notificationToggle) {
-  notificationToggle.addEventListener('change', async (e) => {
-    if (e.target.checked) {
-      await requestNotificationPermission();
-    } else {
-      await disableNotificationPermission();
-    }
-  });
-
-  if (Notification.permission === 'granted' && localStorage.getItem('duty_notification_enabled') === 'true') {
-    notificationToggle.checked = true;
-  } else {
+  if (!notifSupported) {
+    // iOS Safari 브라우저 등 Notification 미지원 환경: 토글 비활성화
+    notificationToggle.disabled = true;
     notificationToggle.checked = false;
+  } else {
+    notificationToggle.addEventListener('change', async (e) => {
+      if (e.target.checked) {
+        await requestNotificationPermission();
+      } else {
+        await disableNotificationPermission();
+      }
+    });
+
+    if (Notification.permission === 'granted' && localStorage.getItem('duty_notification_enabled') === 'true') {
+      notificationToggle.checked = true;
+    } else {
+      notificationToggle.checked = false;
+    }
   }
 }
 
@@ -222,6 +231,12 @@ async function cleanDuplicateTokens(targetToken, keepSafeKey, keepDeviceId) {
 // [수정] 알림 동의 처리 및 토큰 등록
 // - DB 저장 경로: push_tokens/{safeKey}/{deviceId} (기기별 독립 저장)
 async function requestNotificationPermission() {
+  if (!notifSupported) {
+    alert('이 환경에서는 알림을 지원하지 않습니다.\n설치(홈 화면에 추가) 후 이용해 주세요.');
+    if (notificationToggle) notificationToggle.checked = false;
+    return false;
+  }
+
   if (!currentUsername) {
     alert("이름을 먼저 등록하고 저장해 주세요.");
     if (notificationToggle) notificationToggle.checked = false;
@@ -280,7 +295,7 @@ async function disableNotificationPermission() {
   let currentToken = null;
 
   try {
-    if (messaging) {
+    if (notifSupported && messaging) {
       const swReg = await navigator.serviceWorker.ready;
       currentToken = await getToken(messaging, {
         vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
@@ -687,7 +702,7 @@ async function saveUsername() {
 
     // 2. 알림 설정 ON 상태일 경우 새 이름으로 토큰 등록
     if (isNotificationEnabled) {
-      if (Notification.permission === 'granted') {
+      if (notifSupported && Notification.permission === 'granted') {
         const swReg = await navigator.serviceWorker.ready;
         const currentToken = await getToken(messaging, {
           vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
