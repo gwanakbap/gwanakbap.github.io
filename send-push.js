@@ -18,6 +18,13 @@ function sanitizeKey(key) {
   return (key || "").replace(/[.#$\[\]\/]/g, "_");
 }
 
+// 만료되었거나 앱 삭제 등으로 유효하지 않은 FCM 토큰 에러 코드 목록
+const INVALID_TOKEN_ERROR_CODES = [
+  'messaging/registration-token-not-registered',
+  'messaging/invalid-registration-token',
+  'messaging/invalid-argument'
+];
+
 async function main() {
   const now = new Date();
   const utcMs = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
@@ -94,7 +101,7 @@ async function main() {
       token,
       userName: target.name,
       userKey: safeKey,
-      deviceId,                     // 기기별 삭제를 위해 보관 (null이면 구형 flat 구조)
+      deviceId, // 기기별 삭제를 위해 보관 (null이면 구형 flat 구조)
       notification: {
         title: '[당직 안내]',
         body: `${target.name}님, 내일은 당직 근무일입니다. 근무 시간을 확인해 주세요.`
@@ -109,20 +116,22 @@ async function main() {
       }
     });
 
-    // 구형(flat) 구조: push_tokens/{safeKey} = { token, enabled, ... }
+    // 1. 구형(flat) 구조: push_tokens/{safeKey} = { token, enabled, ... }
     if (userTokenData.token) {
-      messages.push(buildMessage(userTokenData.token, null));
+      if (userTokenData.enabled !== false) {
+        messages.push(buildMessage(userTokenData.token, null));
+      }
     } else {
-      // 신형(nested) 구조: push_tokens/{safeKey}/{deviceId} = { token, enabled, ... }
-      // 동일 사용자의 모든 기기 토큰에 발송
+      // 2. 신형(nested) 구조: push_tokens/{safeKey}/{deviceId} = { token, enabled, ... }
       Object.entries(userTokenData).forEach(([deviceId, deviceData]) => {
-        if (deviceData?.token) {
+        // enabled가 false인 기기는 제외
+        if (deviceData?.token && deviceData?.enabled !== false) {
           messages.push(buildMessage(deviceData.token, deviceId));
         }
       });
 
-      if (!Object.values(userTokenData).some(d => d?.token)) {
-        console.log(`[스킵] ${target.name} - 유효한 토큰 없음`);
+      if (!Object.values(userTokenData).some(d => d?.token && d?.enabled !== false)) {
+        console.log(`[스킵] ${target.name} - 유효하거나 활성화된 토큰 없음`);
       }
     }
   }
@@ -140,30 +149,34 @@ async function main() {
 
   console.log(`발송 결과 - 성공: ${response.successCount}건, 실패: ${response.failureCount}건`);
 
-  // 실패한 토큰(만료/등록취소) DB 삭제 처리
+  // 2번 방법: 발송 실패 건 중 앱 삭제/토큰 만료 건 DB 정제 처리
   if (response.failureCount > 0) {
-    for (let i = 0; i < response.responses.length; i++) {
-      const resp = response.responses[i];
+    const cleanupPromises = [];
+
+    response.responses.forEach((resp, i) => {
       if (!resp.success) {
         const errCode = resp.error?.code;
         const targetUser = messages[i];
         console.error(`[발송 실패] ${targetUser.userName} (${errCode}):`, resp.error?.message);
 
-        if (
-          errCode === 'messaging/registration-token-not-registered' ||
-          errCode === 'messaging/invalid-registration-token'
-        ) {
-          console.log(`[토큰 삭제] ${targetUser.userName}의 무효한 토큰 DB 삭제 진행`);
+        // 무효하거나 삭제된 토큰 에러 감지
+        if (INVALID_TOKEN_ERROR_CODES.includes(errCode)) {
+          console.log(`[토큰 삭제 예약] ${targetUser.userName}의 무효한 토큰 DB 삭제 진행`);
 
           if (targetUser.deviceId) {
-            // 신형 nested 구조: 해당 기기의 토큰만 삭제 (다른 기기 토큰 유지)
-            await db.ref(`push_tokens/${targetUser.userKey}/${targetUser.deviceId}`).remove();
+            // 신형 nested 구조: 해당 기기 노드만 삭제
+            cleanupPromises.push(db.ref(`push_tokens/${targetUser.userKey}/${targetUser.deviceId}`).remove());
           } else {
             // 구형 flat 구조: 사용자 노드 전체 삭제
-            await db.ref(`push_tokens/${targetUser.userKey}`).remove();
+            cleanupPromises.push(db.ref(`push_tokens/${targetUser.userKey}`).remove());
           }
         }
       }
+    });
+
+    if (cleanupPromises.length > 0) {
+      await Promise.all(cleanupPromises);
+      console.log(`[토큰 정리 완료] 유효하지 않은 토큰 노드 ${cleanupPromises.length}개를 DB에서 성공적으로 삭제했습니다.`);
     }
   }
 
