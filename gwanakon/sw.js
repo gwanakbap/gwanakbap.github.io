@@ -1,7 +1,7 @@
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
-const STATIC_CACHE = 'gwanakon-cache-v1.4.1';
+const STATIC_CACHE = 'gwanakon-cache-v1.4.3';
 
 const ASSETS = [
   './',

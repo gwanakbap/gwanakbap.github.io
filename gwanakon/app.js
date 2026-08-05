@@ -229,7 +229,8 @@ async function cleanDuplicateTokens(targetToken, keepSafeKey, keepDeviceId) {
 }
 
 // [수정] 알림 동의 처리 및 토큰 등록
-// - DB 저장 경로: push_tokens/{safeKey}/{deviceId} (기기별 독립 저장)
+// - 이름 미등록 시 알림 권한 팝업 없이 이름 먼저 등록하도록 안내 및 입력창 포커스
+// - 이름 등록 완료 상태에서만 브라우저 알림 권한 팝업 및 DB 토큰 저장 진행
 async function requestNotificationPermission() {
   if (!notifSupported) {
     alert('이 환경에서는 알림을 지원하지 않습니다.\n설치(홈 화면에 추가) 후 이용해 주세요.');
@@ -237,16 +238,24 @@ async function requestNotificationPermission() {
     return false;
   }
 
+  // 1. 이름이 등록되어 있는지 먼저 확인
   if (!currentUsername) {
-    alert("이름을 먼저 등록하고 저장해 주세요.");
+    alert('이름을 먼저 설정해주세요.');
     if (notificationToggle) notificationToggle.checked = false;
+    
+    // 이름 입력창으로 포커스 이동
+    const input = document.getElementById('username-input');
+    if (input) input.focus();
     return false;
   }
 
+  // 2. 이름이 등록된 상태에서만 브라우저 권한 팝업 요청
   try {
     const permission = await Notification.requestPermission();
+
     if (permission === 'granted') {
       localStorage.setItem('duty_notification_enabled', 'true');
+
       if (messaging) {
         const swReg = await navigator.serviceWorker.ready;
         const currentToken = await getToken(messaging, {
@@ -258,20 +267,17 @@ async function requestNotificationPermission() {
           const safeKey = sanitizeKey(currentUsername);
           const deviceId = getOrCreateDeviceId();
 
-          // 현재 기기 토큰을 기기별 경로에 저장
           await set(ref(db, `push_tokens/${safeKey}/${deviceId}`), {
             token: currentToken,
             enabled: true,
             updatedAt: new Date().toISOString()
           });
 
-          // 동일 토큰을 가진 다른 위치의 노드 삭제
           await cleanDuplicateTokens(currentToken, safeKey, deviceId);
-
-          console.log("FCM 토큰 등록 및 중복 정리 완료");
-          return true;
+          console.log(`[성공] FCM 토큰 등록 및 DB 저장 완료: ${safeKey}`);
         }
       }
+      return true;
     } else {
       alert("알림 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요.");
       if (notificationToggle) notificationToggle.checked = false;
@@ -673,9 +679,7 @@ function isNameInDutyData(name) {
 }
 
 // [수정] 이름 저장 로직
-// - 금월 당직 데이터에 없는 이름은 저장 불가
-// - 이름 변경 시 현재 기기의 구 이름 노드만 삭제 (다른 기기 데이터 보존)
-// - 새 이름으로 현재 기기 토큰을 기기별 경로에 등록
+// - 권한 요청 팝업을 발생시키지 않음 (Notification.permission === 'granted' 일 때만 단순 토큰 저장)
 async function saveUsername() {
   const input = document.getElementById('username-input');
   if (!input) return;
@@ -687,13 +691,11 @@ async function saveUsername() {
     return;
   }
 
-  // 금월 데이터 로드 여부 확인
   if (dutyData.length === 0) {
     alert('당직 데이터를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.');
     return;
   }
 
-  // 금월 당직 명단에 없는 이름 차단
   if (!isNameInDutyData(newName)) {
     alert(`'${newName}'은(는) 이번 달 당직 명단에 없는 이름입니다.\n정확한 이름을 입력해 주세요.`);
     input.focus();
@@ -704,48 +706,36 @@ async function saveUsername() {
   currentUsername = newName;
   localStorage.setItem('duty_app_username', newName);
 
-  const isNotificationEnabled = notificationToggle && notificationToggle.checked;
+  const isNotificationEnabled = localStorage.getItem('duty_notification_enabled') === 'true';
   const deviceId = getOrCreateDeviceId();
 
   try {
-    // 1. 이름이 변경된 경우 기존 이름의 현재 기기 노드만 삭제
+    // 1. 이름이 변경된 경우 기존 이름 노드 삭제
     if (oldName && oldName !== newName) {
       const oldSafeKey = sanitizeKey(oldName);
       await remove(ref(db, `push_tokens/${oldSafeKey}/${deviceId}`));
     }
 
-    // 2. 알림 설정 ON 상태일 경우 새 이름으로 토큰 등록
-    if (isNotificationEnabled) {
-      if (notifSupported && Notification.permission === 'granted') {
-        const swReg = await navigator.serviceWorker.ready;
-        const currentToken = await getToken(messaging, {
-          vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
-          serviceWorkerRegistration: swReg
+    // 2. 알림 설정이 ON이고 이미 브라우저 권한이 허용된 경우에만 팝업 없이 토큰 DB 등록
+    if (isNotificationEnabled && notifSupported && Notification.permission === 'granted' && messaging) {
+      const swReg = await navigator.serviceWorker.ready;
+      const currentToken = await getToken(messaging, {
+        vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
+        serviceWorkerRegistration: swReg
+      });
+
+      if (currentToken) {
+        const newSafeKey = sanitizeKey(newName);
+
+        await set(ref(db, `push_tokens/${newSafeKey}/${deviceId}`), {
+          token: currentToken,
+          enabled: true,
+          updatedAt: new Date().toISOString()
         });
 
-        if (currentToken) {
-          const newSafeKey = sanitizeKey(newName);
-
-          // 새 이름 + 현재 기기 ID로 토큰 등록
-          await set(ref(db, `push_tokens/${newSafeKey}/${deviceId}`), {
-            token: currentToken,
-            enabled: true,
-            updatedAt: new Date().toISOString()
-          });
-
-          // 동일한 토큰을 가지는 다른 모든 노드 삭제
-          await cleanDuplicateTokens(currentToken, newSafeKey, deviceId);
-
-          localStorage.setItem('duty_notification_enabled', 'true');
-          console.log(`[성공] 새 이름(${newName})으로 토큰 저장 및 중복 토큰 정리 완료`);
-        }
-      } else {
-        if (notificationToggle) notificationToggle.checked = false;
-        await disableNotificationPermission();
+        await cleanDuplicateTokens(currentToken, newSafeKey, deviceId);
+        console.log(`[성공] 새 이름(${newName})으로 토큰 DB 등록 완료`);
       }
-    } else {
-      // 3. 알림 설정 OFF 상태일 경우 현재 기기의 토큰 데이터 삭제
-      await disableNotificationPermission();
     }
   } catch (err) {
     console.error("이름 저장 후 알림 처리 중 오류 발생:", err);
