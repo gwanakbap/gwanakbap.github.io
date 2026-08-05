@@ -538,6 +538,13 @@ window.changeDay = function(delta) {
   }
 };
 
+// [추가] 남은 당직 리스트에서 항목 클릭 시 해당 날짜로 이동하는 함수
+window.selectDayFromNextDuty = function(day) {
+  selectedDay = day;
+  renderDutyInfo();
+  goToPage(1); // 카드가 메인 화면(인덱스 1)에 위치한다고 가정하고 페이지 포커스를 이동
+};
+
 function renderDutyInfo() {
   const currentDataList = dutyData.filter(d => d.day === selectedDay);
   const todayCard = document.getElementById('today-card');
@@ -600,10 +607,10 @@ function renderDutyInfo() {
   if (nextDutyCard) {
     if (!currentUsername) {
       nextDutyCard.innerHTML = `
-        <div class="card-title">다음 당직 안내</div>
+        <div class="card-title">내 당직 안내</div>
         <div class="duty-info" style="flex-direction: column; align-items: center; justify-content: center; padding: 10px 0;">
           <p style="color:var(--text-sub); font-size:14px; text-align:center; margin: 0 0 15px 0; line-height: 1.4;">
-            설정에서 본인의 이름을 등록하시면<br>다음 당직일까지 남은 날짜를 알려드립니다.
+            설정에서 본인의 이름을 등록하시면<br>이번 달 남은 당직일을 모두 알려드립니다.
           </p>
           <button class="btn-save" style="width: auto; padding: 8px 20px; font-size: 14px; border-radius: 20px; cursor: pointer;" onclick="document.getElementById('nav-btn-2')?.click()">
             ⚙️ 이름 설정하러 가기
@@ -619,27 +626,34 @@ function renderDutyInfo() {
       });
 
       upcomingDuties.sort((a, b) => a.day - b.day);
-      const myNextDuty = upcomingDuties.length > 0 ? upcomingDuties[0] : null;
 
+      // [수정] 여러 개의 남은 당직을 리스트업할 수 있도록 레이아웃 래퍼(flex column) 추가
       let nextDutyHTML = `
-        <div class="card-title">다음 <span>${currentUsername}</span> 님의 당직</div>
-        <div class="duty-info">
+        <div class="card-title"><span>${currentUsername}</span> 님의 남은 당직</div>
+        <div class="duty-list-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
       `;
 
-      if (myNextDuty) {
-        const shiftLabel = myNextDuty.shiftType ? ` (${myNextDuty.shiftType})` : '';
-        const nextDutyDateObj = new Date(targetYear, targetMonth - 1, myNextDuty.day);
-        const dDayMs = nextDutyDateObj.getTime() - todayTime;
-        const dDayVal = Math.round(dDayMs / (1000 * 60 * 60 * 24));
+      if (upcomingDuties.length > 0) {
+        upcomingDuties.forEach(myDuty => {
+          const shiftLabel = myDuty.shiftType ? ` (${myDuty.shiftType})` : '';
+          const nextDutyDateObj = new Date(targetYear, targetMonth - 1, myDuty.day);
+          const dDayMs = nextDutyDateObj.getTime() - todayTime;
+          const dDayVal = Math.round(dDayMs / (1000 * 60 * 60 * 24));
 
-        nextDutyHTML += `
-          <div class="duty-date">${targetMonth}월 ${myNextDuty.day}일 (${myNextDuty.dayOfWeek || weekDays[nextDutyDateObj.getDay()]})${shiftLabel}</div>
-          <div class="d-day">${dDayVal === 0 ? "D-Day" : `D-${dDayVal}`}</div>
-        `;
+          // onclick 이벤트를 할당하여 클릭 시 해당 날짜로 변경 처리
+          nextDutyHTML += `
+            <div class="duty-info" style="cursor: pointer;" onclick="selectDayFromNextDuty(${myDuty.day})">
+              <div class="duty-date">${targetMonth}월 ${myDuty.day}일 (${myDuty.dayOfWeek || weekDays[nextDutyDateObj.getDay()]})${shiftLabel}</div>
+              <div class="d-day">${dDayVal === 0 ? "D-Day" : `D-${dDayVal}`}</div>
+            </div>
+          `;
+        });
       } else {
         nextDutyHTML += `
-          <div class="duty-date">일정 없음</div>
-          <div class="d-day">D--</div>
+          <div class="duty-info">
+            <div class="duty-date">남은 일정 없음</div>
+            <div class="d-day">D--</div>
+          </div>
         `;
       }
 
