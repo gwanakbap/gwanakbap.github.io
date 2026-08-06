@@ -49,9 +49,7 @@ function sanitizeKey(key) {
   return (key || "").replace(/[.#$\[\]\/]/g, "_");
 }
 
-// [신규] 기기 고유 ID 생성 및 관리
-// - 기기별로 다른 FCM 토큰을 구분하기 위한 식별자
-// - 최초 접속 시 생성되어 localStorage에 영구 보관
+// 기기 고유 ID 생성 및 관리
 function getOrCreateDeviceId() {
   let deviceId = localStorage.getItem('duty_device_id');
   if (!deviceId) {
@@ -62,7 +60,6 @@ function getOrCreateDeviceId() {
 }
 
 let dutyData = [];
-let lastRawDataJson = localStorage.getItem('duty_cached_data') || "";
 let currentUsername = localStorage.getItem('duty_app_username') || "";
 
 const now = new Date();
@@ -70,6 +67,11 @@ const todayYear = now.getFullYear();
 const todayMonth = now.getMonth() + 1;
 const todayDay = now.getDate();
 const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
+
+// 탭 조회를 위한 상태 관리 (0: 이번 달, 1: 다음 달)
+let currentViewOffset = 0; 
+let currentDbUnsubscribe = null;
+let lastRawDataJson = "";
 
 let targetYear = todayYear;
 let targetMonth = todayMonth;
@@ -82,12 +84,20 @@ const usernameInput = document.getElementById('username-input');
 const btnSaveUsername = document.getElementById('btn-save-username');
 const notificationToggle = document.getElementById('notification-toggle');
 
+// 탭 스위치 버튼 엘리먼트
+const btnThisMonth = document.getElementById('btn-this-month');
+const btnNextMonth = document.getElementById('btn-next-month');
+
 if (usernameInput) usernameInput.value = currentUsername;
 
 document.getElementById('nav-btn-0')?.addEventListener('click', () => goToPage(0));
 document.getElementById('nav-btn-1')?.addEventListener('click', () => goToPage(1));
 document.getElementById('nav-btn-2')?.addEventListener('click', () => goToPage(2));
 btnSaveUsername?.addEventListener('click', saveUsername);
+
+// 탭 스위치 클릭 이벤트 바인딩
+btnThisMonth?.addEventListener('click', () => switchMonthTab(0));
+btnNextMonth?.addEventListener('click', () => switchMonthTab(1));
 
 // 앱 오픈(Foreground) 중 알림 수신
 if (messaging) {
@@ -102,7 +112,6 @@ if (messaging) {
 // 알림 토글 스위치 이벤트
 if (notificationToggle) {
   if (!notifSupported) {
-    // iOS Safari 브라우저 등 Notification 미지원 환경: 토글 비활성화
     notificationToggle.disabled = true;
     notificationToggle.checked = false;
   } else {
@@ -197,9 +206,7 @@ if (viewport) {
 window.addEventListener('mousemove', touchMove);
 window.addEventListener('mouseup', touchEnd);
 
-// [수정] 동일한 FCM 토큰을 보유한 다른 기기/사용자의 DB 데이터 삭제
-// - keepSafeKey + keepDeviceId 조합에 해당하는 항목만 보존
-// - 구형(flat) 구조와 신형(nested) 구조 모두 처리
+// 동일 토큰 복수 노드 정리
 async function cleanDuplicateTokens(targetToken, keepSafeKey, keepDeviceId) {
   if (!targetToken) return;
   try {
@@ -212,7 +219,6 @@ async function cleanDuplicateTokens(targetToken, keepSafeKey, keepDeviceId) {
       const userData = userSnap.val();
       if (!userData || typeof userData !== 'object') return;
 
-      // 구형(flat) 구조: push_tokens/{userKey} = { token, enabled, ... }
       if (userData.token) {
         if (userData.token === targetToken) {
           updates[`push_tokens/${userKey}`] = null;
@@ -220,12 +226,11 @@ async function cleanDuplicateTokens(targetToken, keepSafeKey, keepDeviceId) {
         return;
       }
 
-      // 신형(nested) 구조: push_tokens/{userKey}/{deviceId} = { token, enabled, ... }
       userSnap.forEach((deviceSnap) => {
         const deviceId = deviceSnap.key;
         const deviceData = deviceSnap.val();
         if (deviceData?.token === targetToken) {
-          if (userKey === keepSafeKey && deviceId === keepDeviceId) return; // 현재 기기 유지
+          if (userKey === keepSafeKey && deviceId === keepDeviceId) return;
           updates[`push_tokens/${userKey}/${deviceId}`] = null;
         }
       });
@@ -240,9 +245,6 @@ async function cleanDuplicateTokens(targetToken, keepSafeKey, keepDeviceId) {
   }
 }
 
-// [수정] 알림 동의 처리 및 토큰 등록
-// - 이름 미등록 시 알림 권한 팝업 없이 이름 먼저 등록하도록 안내 및 입력창 포커스
-// - 이름 등록 완료 상태에서만 브라우저 알림 권한 팝업 및 DB 토큰 저장 진행
 async function requestNotificationPermission() {
   if (!notifSupported) {
     alert('이 환경에서는 알림을 지원하지 않습니다.\n설치(홈 화면에 추가) 후 이용해 주세요.');
@@ -250,18 +252,14 @@ async function requestNotificationPermission() {
     return false;
   }
 
-  // 1. 이름이 등록되어 있는지 먼저 확인
   if (!currentUsername) {
     alert('이름을 먼저 설정해주세요.');
     if (notificationToggle) notificationToggle.checked = false;
-    
-    // 이름 입력창으로 포커스 이동
     const input = document.getElementById('username-input');
     if (input) input.focus();
     return false;
   }
 
-  // 2. 이름이 등록된 상태에서만 브라우저 권한 팝업 요청
   try {
     const permission = await Notification.requestPermission();
 
@@ -303,9 +301,6 @@ async function requestNotificationPermission() {
   }
 }
 
-// [수정] 알림 비활성화 처리
-// - 현재 기기(deviceId)의 토큰 데이터만 삭제 (다른 기기 토큰 유지)
-// - 구형 flat 구조 잔여 데이터도 현재 토큰 기준으로 함께 정리
 async function disableNotificationPermission() {
   localStorage.setItem('duty_notification_enabled', 'false');
 
@@ -320,20 +315,16 @@ async function disableNotificationPermission() {
         serviceWorkerRegistration: swReg
       });
     }
-  } catch (e) {
-    // 토큰 조회 실패 시 무시
-  }
+  } catch (e) {}
 
   try {
     const updates = {};
 
-    // 1. 현재 이름 + 현재 기기 ID 노드 삭제
     if (currentUsername) {
       const safeKey = sanitizeKey(currentUsername);
       updates[`push_tokens/${safeKey}/${deviceId}`] = null;
     }
 
-    // 2. 현재 토큰을 가진 다른 노드도 삭제 (구형 flat 구조 포함)
     if (currentToken) {
       const snapshot = await get(ref(db, 'push_tokens'));
       if (snapshot.exists()) {
@@ -342,13 +333,11 @@ async function disableNotificationPermission() {
           const userData = userSnap.val();
           if (!userData) return;
 
-          // 구형 flat 구조
           if (userData.token === currentToken) {
             updates[`push_tokens/${userKey}`] = null;
             return;
           }
 
-          // 신형 nested 구조
           if (typeof userData === 'object' && !userData.token) {
             userSnap.forEach((deviceSnap) => {
               if (deviceSnap.val()?.token === currentToken) {
@@ -406,21 +395,11 @@ function processRawData(rawData) {
   return { list: processedList, rawHeader: extractedHeader };
 }
 
+// [수정] targetYear/targetMonth를 외부에서 변경하지 않고 렌더링에만 집중하도록 수정
 function applyDataToUI(list, rawHeader) {
   dutyData = list;
 
-  const headerMatch = rawHeader.match(/(\d+)월/);
-  if (headerMatch) {
-    targetMonth = parseInt(headerMatch[1], 10);
-
-    if (todayMonth === 12 && targetMonth === 1) targetYear = todayYear + 1;
-    else if (todayMonth === 1 && targetMonth === 12) targetYear = todayYear - 1;
-    else targetYear = todayYear;
-  } else {
-    targetMonth = todayMonth;
-    targetYear = todayYear;
-  }
-
+  // 오늘 날짜 선택 여부 결정 (현재 보고 있는 년/월이 이번 달인 경우 오늘 날짜 선택)
   if (targetYear === todayYear && targetMonth === todayMonth) {
     selectedDay = todayDay;
   } else {
@@ -436,43 +415,87 @@ function applyDataToUI(list, rawHeader) {
   renderDutyInfo();
 }
 
-if (lastRawDataJson) {
-  try {
-    const cachedVal = JSON.parse(lastRawDataJson);
-    const { list, rawHeader } = processRawData(cachedVal);
-    applyDataToUI(list, rawHeader);
-  } catch (e) {
-    console.error(e);
+// 선택된 탭(0: 이번 달, 1: 다음 달) 데이터 연동 처리
+function switchMonthTab(offset) {
+  currentViewOffset = offset;
+
+  // 탭 버튼 UI 업데이트
+  if (btnThisMonth) btnThisMonth.classList.toggle('active', offset === 0);
+  if (btnNextMonth) btnNextMonth.classList.toggle('active', offset === 1);
+
+  // 연월 계산
+  let calcMonth = todayMonth + offset;
+  let calcYear = todayYear;
+  if (calcMonth > 12) {
+    calcMonth -= 12;
+    calcYear += 1;
   }
-}
 
-const currentYearStr = String(todayYear);
-const currentMonthStr = String(todayMonth).padStart(2, '0');
-const dbPath = `gwanak-on/${currentYearStr}-${currentMonthStr}`;
+  targetYear = calcYear;
+  targetMonth = calcMonth;
 
-const dbRef = ref(db, dbPath);
+  // 이전 실시간 리스너 구독 해제
+  if (currentDbUnsubscribe) {
+    currentDbUnsubscribe();
+    currentDbUnsubscribe = null;
+  }
 
-onValue(dbRef, (snapshot) => {
-  const val = snapshot.val();
+  // 월별 캐시 데이터 로드
+  const cacheKey = `duty_cached_data_${targetYear}_${targetMonth}`;
+  const cachedJson = localStorage.getItem(cacheKey) || "";
+  lastRawDataJson = cachedJson;
 
-  if (!val) {
-    lastRawDataJson = "";
-    localStorage.removeItem('duty_cached_data');
+  if (cachedJson) {
+    try {
+      const cachedVal = JSON.parse(cachedJson);
+      const { list, rawHeader } = processRawData(cachedVal);
+      applyDataToUI(list, rawHeader);
+    } catch (e) {
+      console.error(e);
+    }
+  } else {
     applyDataToUI([], "");
     const headerElem = document.getElementById('app-header');
-    if (headerElem) headerElem.innerText = `${todayYear}년 ${todayMonth}월 (업데이트 예정)`;
-    return;
+    if (headerElem) headerElem.innerText = `${targetYear}년 ${targetMonth}월 (불러오는 중...)`;
   }
 
-  const currentRawDataJson = JSON.stringify(val);
-  if (currentRawDataJson === lastRawDataJson) return;
+  // 새로운 월 Firebase RTDB 연동
+  const currentYearStr = String(targetYear);
+  const currentMonthStr = String(targetMonth).padStart(2, '0');
+  const dbPath = `gwanak-on/${currentYearStr}-${currentMonthStr}`;
+  const dbRef = ref(db, dbPath);
 
-  lastRawDataJson = currentRawDataJson;
-  localStorage.setItem('duty_cached_data', currentRawDataJson);
+  // 현재 요청한 탭의 offset 저장
+  const requestedOffset = offset;
 
-  const { list, rawHeader } = processRawData(val);
-  applyDataToUI(list, rawHeader);
-});
+  currentDbUnsubscribe = onValue(dbRef, (snapshot) => {
+    // [비동기 안전 검증] 사용자가 클릭한 현재 탭과 응답이 일치하지 않으면 무시
+    if (currentViewOffset !== requestedOffset) return;
+
+    const val = snapshot.val();
+
+    if (!val) {
+      lastRawDataJson = "";
+      localStorage.removeItem(cacheKey);
+      applyDataToUI([], "");
+      const headerElem = document.getElementById('app-header');
+      if (headerElem) headerElem.innerText = `${targetYear}년 ${targetMonth}월 (업데이트 예정)`;
+      return;
+    }
+
+    const currentRawDataJson = JSON.stringify(val);
+    if (currentRawDataJson === lastRawDataJson && dutyData.length > 0) return;
+
+    lastRawDataJson = currentRawDataJson;
+    localStorage.setItem(cacheKey, currentRawDataJson);
+
+    const { list, rawHeader } = processRawData(val);
+    applyDataToUI(list, rawHeader);
+  });
+}
+
+// 최초 실행: 기본값으로 '이번 달(0)' 로드
+switchMonthTab(0);
 
 function renderCalendar() {
   const grid = document.getElementById('calendar-grid');
@@ -556,11 +579,10 @@ window.changeDay = function(delta) {
   }
 };
 
-// [추가] 남은 당직 리스트에서 항목 클릭 시 해당 날짜로 이동하는 함수
 window.selectDayFromNextDuty = function(day) {
   selectedDay = day;
   renderDutyInfo();
-  goToPage(1); // 카드가 메인 화면(인덱스 1)에 위치한다고 가정하고 페이지 포커스를 이동
+  goToPage(1);
 };
 
 function renderDutyInfo() {
@@ -645,7 +667,6 @@ function renderDutyInfo() {
 
       upcomingDuties.sort((a, b) => a.day - b.day);
 
-      // [수정] 여러 개의 남은 당직을 리스트업할 수 있도록 레이아웃 래퍼(flex column) 추가
       let nextDutyHTML = `
         <div class="card-title"><span>${currentUsername}</span> 님의 남은 당직</div>
         <div class="duty-list-container" style="display: flex; flex-direction: column; gap: 8px; margin-top: 15px;">
@@ -658,7 +679,6 @@ function renderDutyInfo() {
           const dDayMs = nextDutyDateObj.getTime() - todayTime;
           const dDayVal = Math.round(dDayMs / (1000 * 60 * 60 * 24));
 
-          // onclick 이벤트를 할당하여 클릭 시 해당 날짜로 변경 처리
           nextDutyHTML += `
             <div class="duty-info" style="cursor: pointer;" onclick="selectDayFromNextDuty(${myDuty.day})">
               <div class="duty-date">${targetMonth}월 ${myDuty.day}일 (${myDuty.dayOfWeek || weekDays[nextDutyDateObj.getDay()]})${shiftLabel}</div>
@@ -681,7 +701,6 @@ function renderDutyInfo() {
   }
 }
 
-// 금월 당직 데이터에 해당 이름이 존재하는지 확인
 function isNameInDutyData(name) {
   return dutyData.some(d =>
     d.leaderName === name ||
@@ -690,8 +709,6 @@ function isNameInDutyData(name) {
   );
 }
 
-// [수정] 이름 저장 로직
-// - 권한 요청 팝업을 발생시키지 않음 (Notification.permission === 'granted' 일 때만 단순 토큰 저장)
 async function saveUsername() {
   const input = document.getElementById('username-input');
   if (!input) return;
@@ -722,13 +739,11 @@ async function saveUsername() {
   const deviceId = getOrCreateDeviceId();
 
   try {
-    // 1. 이름이 변경된 경우 기존 이름 노드 삭제
     if (oldName && oldName !== newName) {
       const oldSafeKey = sanitizeKey(oldName);
       await remove(ref(db, `push_tokens/${oldSafeKey}/${deviceId}`));
     }
 
-    // 2. 알림 설정이 ON이고 이미 브라우저 권한이 허용된 경우에만 팝업 없이 토큰 DB 등록
     if (isNotificationEnabled && notifSupported && Notification.permission === 'granted' && messaging) {
       const swReg = await navigator.serviceWorker.ready;
       const currentToken = await getToken(messaging, {

@@ -30,7 +30,6 @@ body {
 #app-container {
     margin: 0 auto;
     width: 100%;
-    /* 모바일에서는 꽉 차게, PC 등 넓은 화면에서는 최대 400px 제한 */
     max-width: 100%; 
     height: 100%;
     background-color: var(--bg-color);
@@ -49,12 +48,10 @@ body {
 header {
     background-color: var(--blue);
     padding: 0 16px;
-
     font-size: 18px;
-    font-weight: 800; /* 조금 더 또렷하고 두껍게 */
-    color: #1e293b;   /* 배경(파란색) 대비 가독성이 좋은 짙은 슬레이트 컬러 */
-    letter-spacing: -0.5px; /* 한글 가독성을 최적화하는 좁은 자간 */
-
+    font-weight: 800;
+    color: #1e293b;
+    letter-spacing: -0.5px;
     display: flex;
     align-items: center;
     height: var(--header-height);
@@ -115,17 +112,55 @@ header {
     flex: 1;
     min-height: 0;
 }
+
+/* 달력 상단 헤더: 제목(좌) + 버튼(우) 한 줄 배치 */
 .calendar-nav {
     display: flex;
-    justify-content: center;
+    flex-direction: row;
+    justify-content: space-between;
     align-items: center;
     margin-bottom: 8px;
+    padding: 0 4px;
     flex-shrink: 0;
 }
 .cal-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--text-main);
+    letter-spacing: -0.3px;
+}
+
+/* 콤팩트 탭 버튼 그룹 */
+.month-tab-container {
+    display: flex;
+    background-color: #f1f5f9;
+    border-radius: 8px;
+    padding: 2px;
+    gap: 2px;
+    width: auto;
+    border: 1px solid #e2e8f0;
+}
+
+.month-tab-btn {
+    padding: 3px 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    border: none;
+    border-radius: 6px;
+    background-color: transparent;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.25, 1, 0.5, 1);
+    text-align: center;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.month-tab-btn.active {
+    background-color: #ffffff;
+    color: #1e293b;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .calendar-grid {
@@ -138,6 +173,7 @@ header {
     border: 1px solid #e2e8f0;
     flex: 1;
 }
+
 .day-header {
     background-color: #f8fafc;
     text-align: center;
@@ -301,7 +337,7 @@ header {
     padding: 2px 7px;
     border-radius: 5px;
     color: #334155;
-    background-color: #e2e8f0; /* 일반 기본 배경색 */
+    background-color: #e2e8f0;
 }
 /* 일직/숙직에만 #F5C7AA 배경색 지정 */
 .shift-badge.day,
@@ -345,9 +381,8 @@ header {
 
 .bottom-nav {
     bottom: 0; left: 0; width: 100%; 
-    /* 기존 height 대신 안전영역(Safe Area)을 더한 높이로 변경 */
     height: calc(var(--nav-height) + env(safe-area-inset-bottom));
-    padding-bottom: env(safe-area-inset-bottom); /* 아이폰 하단 여백 추가 */
+    padding-bottom: env(safe-area-inset-bottom);
     background-color: #ffffff; display: flex; border-top: 1px solid #e5e7eb; z-index: 10;
 }
 .nav-item {
@@ -355,7 +390,7 @@ header {
     background: none; border: none; color: #888; font-size: 11px; font-weight: 600; cursor: pointer; gap: 3px;
     transition: background-color 0.15s ease, transform 0.1s ease;
     -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none; /* [추가] 롱터치 시 시스템 팝업 방지 */
+    -webkit-touch-callout: none;
     margin: 4px;
     border-radius: 10px;
 }
@@ -380,24 +415,19 @@ header {
     bottom: 20px;
     left: 50%;
     transform: translateX(-50%);
-    
     min-width: 80vw;
     padding: 10px;
     background-color: #e53935;
     color: #ffffff;
-    
     font-size: 16px;
     font-weight: 600;
     text-align: center;
     text-decoration: none;
-    
     border: none;
     border-radius: 12px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    
     cursor: pointer;
     z-index: 9999;
     transition: all 0.3s ease;
-    
     -webkit-tap-highlight-color: transparent;
-    }
+}
