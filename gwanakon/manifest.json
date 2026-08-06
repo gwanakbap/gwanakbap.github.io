@@ -5,7 +5,12 @@
   "scope": "/gwanakon/",
   "icons": [
     {
-      "src": "./gwanakonIcon.png",
+      "src": "./gwanakonIcon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "./gwanakonIcon-512.png",
       "type": "image/png",
       "sizes": "512x512"
     }
