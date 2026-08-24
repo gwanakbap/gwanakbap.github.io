@@ -358,41 +358,40 @@ async function disableNotificationPermission() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────
+// [변경] admin.html이 이미 가공된 { list, rawHeader } 구조로 저장하므로
+//        앱에서는 해당 구조를 그대로 읽어 반환하기만 합니다.
+//        기존의 __EMPTY 키 매핑 및 헤더 추출 로직은 모두 제거되었습니다.
+// ─────────────────────────────────────────────────────────────────
 function processRawData(rawData) {
   if (!rawData) return { list: [], rawHeader: '' };
-  const list = Array.isArray(rawData) ? rawData : Object.values(rawData);
-  let extractedHeader = '';
 
-  const processedList = list.map(item => {
-    let dateStr = item["dateStr"] || "";
-    if (!dateStr) {
-      const foundKey = Object.keys(item).find(k => k.includes("당직상황근무지정"));
-      if (foundKey) {
-        dateStr = item[foundKey];
-        if (!extractedHeader) extractedHeader = foundKey;
-      }
-    }
+  // Firebase에 저장된 포맷: { list: [...], rawHeader: '...' }
+  const rawHeader = rawData.rawHeader || '';
+  const rawList   = rawData.list;
 
-    const parts = dateStr.split('/');
-    const day = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+  if (!rawList) return { list: [], rawHeader };
 
-    return {
-      dateStr: dateStr,
-      day: day,
-      dayOfWeek: item["__EMPTY"] || item["dayOfWeek"] || "",
-      isHoliday: (item["__EMPTY_1"] === "공휴일") || item["isHoliday"] === true,
-      leaderRank: item["__EMPTY_2"] || item["leaderRank"] || "",
-      leaderName: (item["__EMPTY_3"] || item["leaderName"] || "").replace(/\s/g, ''),
-      worker1Rank: item["__EMPTY_4"] || item["worker1Rank"] || "",
-      worker1Name: (item["__EMPTY_5"] || item["worker1Name"] || "").replace(/\s/g, ''),
-      worker2Rank: item["__EMPTY_6"] || item["worker2Rank"] || "",
-      worker2Name: (item["__EMPTY_7"] || item["worker2Name"] || "").replace(/\s/g, ''),
-      shiftType: item["__EMPTY_8"] || item["shiftType"] || "",
-      note: item["__EMPTY_9"] || item["note"] || ""
-    };
-  });
+  const arr = Array.isArray(rawList) ? rawList : Object.values(rawList);
 
-  return { list: processedList, rawHeader: extractedHeader };
+  const list = arr
+    .filter(item => item && String(item.dateStr || '').trim() !== '')
+    .map(item => ({
+      dateStr:     String(item.dateStr    || '').trim(),
+      day:         Number(item.day)       || 0,
+      dayOfWeek:   String(item.dayOfWeek  || '').trim(),
+      isHoliday:   item.isHoliday === true,
+      leaderRank:  String(item.leaderRank  || '').trim(),
+      leaderName:  String(item.leaderName  || '').replace(/\s/g, ''),
+      worker1Rank: String(item.worker1Rank || '').trim(),
+      worker1Name: String(item.worker1Name || '').replace(/\s/g, ''),
+      worker2Rank: String(item.worker2Rank || '').trim(),
+      worker2Name: String(item.worker2Name || '').replace(/\s/g, ''),
+      shiftType:   String(item.shiftType   || '').trim(),
+      note:        String(item.note        || '').trim(),
+    }));
+
+  return { list, rawHeader };
 }
 
 // [수정] targetYear/targetMonth를 외부에서 변경하지 않고 렌더링에만 집중하도록 수정
@@ -468,12 +467,26 @@ function switchMonthTab(offset) {
   // 현재 요청한 탭의 offset 저장
   const requestedOffset = offset;
 
-  currentDbUnsubscribe = onValue(dbRef, (snapshot) => {
+  // [수정된 부분] gwanak-on 데이터가 없을 경우 gwanakon/defaultData/YYYY-MM을 바로 조회하도록 수정
+  currentDbUnsubscribe = onValue(dbRef, async (snapshot) => {
     // [비동기 안전 검증] 사용자가 클릭한 현재 탭과 응답이 일치하지 않으면 무시
     if (currentViewOffset !== requestedOffset) return;
 
-    const val = snapshot.val();
+    let val = snapshot.val();
 
+    // 1. gwanak-on/YYYY-MM 에 데이터가 없을 경우 gwanakon/defaultData/YYYY-MM 조회
+    if (!val) {
+      try {
+        // 경로 수정됨: gwanakon/defaultData/
+        const defaultDbPath = `gwanak-on/defaultData/${currentYearStr}-${currentMonthStr}`;
+        const defaultSnap = await get(ref(db, defaultDbPath));
+        val = defaultSnap.val();
+      } catch (err) {
+        console.error("defaultData 조회 중 오류 발생:", err);
+      }
+    }
+
+    // 2. gwanakon/defaultData/YYYY-MM 에도 데이터가 없다면 '업데이트 예정' 처리
     if (!val) {
       lastRawDataJson = "";
       localStorage.removeItem(cacheKey);
@@ -483,6 +496,7 @@ function switchMonthTab(offset) {
       return;
     }
 
+    // 3. 데이터를 성공적으로 불러온 경우 UI 적용 및 캐시 저장
     const currentRawDataJson = JSON.stringify(val);
     if (currentRawDataJson === lastRawDataJson && dutyData.length > 0) return;
 

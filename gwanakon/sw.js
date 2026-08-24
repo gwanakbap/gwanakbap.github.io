@@ -1,14 +1,15 @@
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
-const STATIC_CACHE = 'gwanakon-cache-v1.4.7';
+const STATIC_CACHE = 'gwanakon-cache-v1.5.0';
 
 const ASSETS = [
   './',
   'index.html',
   'style.css',
   'app.js',
-  'gwanakonIcon.png',
+  'gwanakonIcon-192.png',
+  'gwanakonIcon-512.png',
 ];
 
 // Firebase 백그라운드 푸시 설정

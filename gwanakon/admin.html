@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>과낙ON - 관리자</title>
   
-  <!-- SheetJS CDN -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <style>
@@ -145,9 +144,7 @@
       border-color: var(--primary-color);
     }
 
-    .upload-icon {
-      font-size: 32px;
-    }
+    .upload-icon { font-size: 32px; }
 
     .upload-text {
       font-size: 13.5px;
@@ -162,9 +159,7 @@
       word-break: break-all;
     }
 
-    #excelFileInput {
-      display: none;
-    }
+    #excelFileInput { display: none; }
 
     .btn-primary {
       width: 100%;
@@ -206,23 +201,9 @@
       line-height: 1.4;
     }
 
-    .status-msg.success {
-      display: block;
-      background-color: #dcfce7;
-      color: #15803d;
-    }
-
-    .status-msg.error {
-      display: block;
-      background-color: #fee2e2;
-      color: #b91c1c;
-    }
-
-    .status-msg.loading {
-      display: block;
-      background-color: #e0f2fe;
-      color: #0369a1;
-    }
+    .status-msg.success { display: block; background-color: #dcfce7; color: #15803d; }
+    .status-msg.error   { display: block; background-color: #fee2e2; color: #b91c1c; }
+    .status-msg.loading { display: block; background-color: #e0f2fe; color: #0369a1; }
   </style>
 </head>
 <body>
@@ -281,42 +262,31 @@
   const app = initializeApp(firebaseConfig);
   const db = getDatabase(app);
 
-  const monthInput = document.getElementById('monthInput');
-  const uploadZone = document.getElementById('uploadZone');
-  const fileInput = document.getElementById('excelFileInput');
-  const adminPasswordInput = document.getElementById('adminPassword');
-  const uploadBtn = document.getElementById('uploadBtn');
-  const uploadText = document.getElementById('uploadText');
-  const fileNameInfo = document.getElementById('fileNameInfo');
-  const statusMsg = document.getElementById('statusMsg');
-
-  let selectedFile = null;
-
-  // 한글 자모음을 영문 키보드 배열로 치환해주는 함수
+  // ─────────────────────────────────────────────────
+  // 유틸: 한글 자모음을 영문 키보드 배열로 치환
+  // ─────────────────────────────────────────────────
   function convertKorToEng(text) {
-    const choMap = ['r', 'R', 's', 'e', 'E', 'f', 'a', 'q', 'Q', 't', 'T', 'd', 'w', 'W', 'c', 'z', 'x', 'v', 'g'];
-    const jungMap = ['k', 'o', 'i', 'O', 'j', 'p', 'u', 'P', 'h', 'hk', 'ho', 'hl', 'y', 'n', 'nj', 'np', 'nl', 'b', 'm', 'ml', 'l'];
-    const jongMap = ['', 'r', 'R', 'rt', 's', 'sw', 'sg', 'e', 'f', 'fr', 'fa', 'fq', 'ft', 'fx', 'fv', 'fg', 'a', 'q', 'qt', 't', 'T', 'd', 'w', 'c', 'z', 'x', 'v', 'g'];
+    const choMap = ['r','R','s','e','E','f','a','q','Q','t','T','d','w','W','c','z','x','v','g'];
+    const jungMap = ['k','o','i','O','j','p','u','P','h','hk','ho','hl','y','n','nj','np','nl','b','m','ml','l'];
+    const jongMap = ['','r','R','rt','s','sw','sg','e','f','fr','fa','fq','ft','fx','fv','fg','a','q','qt','t','T','d','w','c','z','x','v','g'];
     const jamoMap = {
-      'ㄱ':'r', 'ㄲ':'R', 'ㄳ':'rt', 'ㄴ':'s', 'ㄵ':'sw', 'ㄶ':'sg', 'ㄷ':'e', 'ㄸ':'E',
-      'ㄹ':'f', 'ㄺ':'fr', 'ㄻ':'fa', 'ㄼ':'fq', 'ㄽ':'ft', 'ㄾ':'fx', 'ㄿ':'fv', 'ㅀ':'fg',
-      'ㅁ':'a', 'ㅂ':'q', 'ㅃ':'Q', 'ㅄ':'qt', 'ㅅ':'t', 'ㅆ':'T', 'ㅇ':'d', 'ㅈ':'w',
-      'ㅉ':'W', 'ㅊ':'c', 'ㅋ':'z', 'ㅌ':'x', 'ㅍ':'v', 'ㅎ':'g',
-      'ㅏ':'k', 'ㅐ':'o', 'ㅑ':'i', 'ㅒ':'O', 'ㅓ':'j', 'ㅔ':'p', 'ㅕ':'u', 'ㅖ':'P',
-      'ㅗ':'h', 'ㅘ':'hk', 'ㅙ':'ho', 'ㅚ':'hl', 'ㅛ':'y', 'ㅜ':'n', 'ㅝ':'nj', 'ㅞ':'np',
-      'ㅟ':'nl', 'ㅠ':'b', 'ㅡ':'m', 'ㅢ':'ml', 'ㅣ':'l'
+      'ㄱ':'r','ㄲ':'R','ㄳ':'rt','ㄴ':'s','ㄵ':'sw','ㄶ':'sg','ㄷ':'e','ㄸ':'E',
+      'ㄹ':'f','ㄺ':'fr','ㄻ':'fa','ㄼ':'fq','ㄽ':'ft','ㄾ':'fx','ㄿ':'fv','ㅀ':'fg',
+      'ㅁ':'a','ㅂ':'q','ㅃ':'Q','ㅄ':'qt','ㅅ':'t','ㅆ':'T','ㅇ':'d','ㅈ':'w',
+      'ㅉ':'W','ㅊ':'c','ㅋ':'z','ㅌ':'x','ㅍ':'v','ㅎ':'g',
+      'ㅏ':'k','ㅐ':'o','ㅑ':'i','ㅒ':'O','ㅓ':'j','ㅔ':'p','ㅕ':'u','ㅖ':'P',
+      'ㅗ':'h','ㅘ':'hk','ㅙ':'ho','ㅚ':'hl','ㅛ':'y','ㅜ':'n','ㅝ':'nj','ㅞ':'np',
+      'ㅟ':'nl','ㅠ':'b','ㅡ':'m','ㅢ':'ml','ㅣ':'l'
     };
-
     let result = '';
     for (let i = 0; i < text.length; i++) {
-      let charCode = text.charCodeAt(i);
-      if (charCode >= 0xAC00 && charCode <= 0xD7A3) {
-        let offset = charCode - 0xAC00;
-        let jongIdx = offset % 28;
-        let jungIdx = Math.floor(offset / 28) % 21;
-        let choIdx = Math.floor(offset / 28 / 21);
-        result += choMap[choIdx] + jungMap[jungIdx] + jongMap[jongIdx];
-      } else if (charCode >= 0x3131 && charCode <= 0x3163) {
+      const code = text.charCodeAt(i);
+      if (code >= 0xAC00 && code <= 0xD7A3) {
+        const offset = code - 0xAC00;
+        result += choMap[Math.floor(offset / 28 / 21)]
+                + jungMap[Math.floor(offset / 28) % 21]
+                + jongMap[offset % 28];
+      } else if (code >= 0x3131 && code <= 0x3163) {
         result += jamoMap[text[i]] || text[i];
       } else {
         result += text[i];
@@ -325,43 +295,145 @@
     return result;
   }
 
-  // Firebase Key 특수문자 치환 함수
-  function sanitizeKeys(data) {
-    if (Array.isArray(data)) {
-      return data.map(item => sanitizeKeys(item));
-    } else if (data !== null && typeof data === 'object') {
-      const sanitized = {};
-      for (const [key, value] of Object.entries(data)) {
-        const cleanKey = key.replace(/[.#$/[\]]/g, '_').trim();
-        sanitized[cleanKey] = sanitizeKeys(value);
-      }
-      return sanitized;
-    }
-    return data;
-  }
+  function processSheet1(rawData) {
+  if (!rawData) return [];
 
-  // 클릭 이벤트
+  const list = Array.isArray(rawData) ? rawData : Object.values(rawData);
+  if (list.length === 0) return [];
+
+  return list
+    .filter(item => String(item.dateStr || '').trim() !== '')
+    .map(item => {
+      const dateStr = String(item.dateStr || '').trim();
+      const parts = dateStr.split('/');
+
+      // 엑셀에서 읽어온 shiftType 검증 (일직/숙직이 아니면 '당직'으로 기본값 설정)
+      const rawShiftType = String(item.shiftType || '').trim();
+      const shiftType = (rawShiftType === '일직' || rawShiftType === '숙직') ? rawShiftType : '당직';
+
+      return {
+        dateStr: dateStr,
+        day: parts.length > 1 ? parseInt(parts[1], 10) : 0,
+        dayOfWeek: String(item.dayOfWeek || '').trim(),
+        isHoliday: String(item.isHoliday || '').trim() === '공휴일',
+        leaderRank: String(item.leaderRank || '').trim(),
+        leaderName: String(item.leaderName || '').replace(/\s/g, ''),
+        worker1Rank: String(item.worker1Rank || '').trim(),
+        worker1Name: String(item.worker1Name || '').replace(/\s/g, ''),
+        worker2Rank: String(item.worker2Rank || '').trim(),
+        worker2Name: String(item.worker2Name || '').replace(/\s/g, ''),
+        shiftType: shiftType,
+      };
+    });
+}
+
+function processSheet2(rawData) {
+  if (!rawData) return {};
+
+  // 1단계: 날짜별 전체 등장 횟수 미리 카운트
+  const dateTotalCountMap = {};
+  rawData.forEach(item => {
+    const dateStr = String(item.dateStr || '').trim();
+    if (dateStr) {
+      dateTotalCountMap[dateStr] = (dateTotalCountMap[dateStr] || 0) + 1;
+    }
+  });
+
+  const monthlyGroup = {};
+  const dateCurrentIndexMap = {}; // 날짜별 처리 순번 추적용
+
+  // 2단계: 데이터 가공 및 근무 유형(shiftType) 판별
+  rawData.forEach(item => {
+    const dateStr = String(item.dateStr || '').trim();
+    if (!dateStr) return;
+
+    const parts = dateStr.split('/');
+    if (parts.length < 3) return;
+
+    const month = parts[0].padStart(2, '0');
+    const day = parseInt(parts[1], 10);
+    const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+    const yearMonth = `${year}-${month}`;
+
+    if (!monthlyGroup[yearMonth]) {
+      monthlyGroup[yearMonth] = [];
+    }
+
+    // 해당 날짜의 총 개수 및 현재 순번 계산
+    const totalCount = dateTotalCountMap[dateStr] || 1;
+    dateCurrentIndexMap[dateStr] = (dateCurrentIndexMap[dateStr] || 0) + 1;
+    const currentIndex = dateCurrentIndexMap[dateStr];
+
+    // shiftType 결정 조건
+    // 1건만 존재할 경우: '당직'
+    // 2건 이상 존재할 경우: 첫 번째 '일직', 두 번째 '숙직'
+    let shiftType = '당직';
+    if (totalCount >= 2) {
+      shiftType = currentIndex === 1 ? '일직' : '숙직';
+    }
+
+    monthlyGroup[yearMonth].push({
+      dateStr: dateStr,
+      day: day,
+      dayOfWeek: String(item.dayOfWeek || '').trim(),
+      isHoliday: String(item.isHoliday || '').trim() === '공휴일',
+      leaderRank: String(item.leaderRank || '').trim(),
+      leaderName: String(item.leaderName || '').replace(/\s/g, ''),
+      worker1Rank: String(item.worker1Rank || '').trim(),
+      worker1Name: String(item.worker1Name || '').replace(/\s/g, ''),
+      worker2Rank: String(item.worker2Rank || '').trim(),
+      worker2Name: String(item.worker2Name || '').replace(/\s/g, ''),
+      shiftType: shiftType,
+    });
+  });
+
+  const monthlyData = {};
+  Object.keys(monthlyGroup).forEach(yearMonth => {
+    const monthNum = parseInt(yearMonth.split('-')[1], 10);
+
+    monthlyData[yearMonth] = {
+      list: monthlyGroup[yearMonth],
+      rawHeader: `당직(기본순서) ${monthNum}월`
+    };
+  });
+
+  return monthlyData;
+}
+
+  // ─────────────────────────────────────────────────
+  // DOM 요소
+  // ─────────────────────────────────────────────────
+  const monthInput       = document.getElementById('monthInput');
+  const uploadZone       = document.getElementById('uploadZone');
+  const fileInput        = document.getElementById('excelFileInput');
+  const adminPasswordInput = document.getElementById('adminPassword');
+  const uploadBtn        = document.getElementById('uploadBtn');
+  const uploadText       = document.getElementById('uploadText');
+  const fileNameInfo     = document.getElementById('fileNameInfo');
+  const statusMsg        = document.getElementById('statusMsg');
+
+  let selectedFile = null;
+
+  // ─────────────────────────────────────────────────
+  // 이벤트 바인딩
+  // ─────────────────────────────────────────────────
   uploadZone.addEventListener('click', () => fileInput.click());
 
-  // 파일 선택 이벤트
   fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (file) handleFileSelect(file);
   });
 
-  // 드래그 앤 드롭 이벤트 보완
-  ['dragenter', 'dragover'].forEach(eventName => {
-    uploadZone.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+  ['dragenter', 'dragover'].forEach(ev => {
+    uploadZone.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
       uploadZone.classList.add('dragover');
     });
   });
 
-  ['dragleave', 'drop'].forEach(eventName => {
-    uploadZone.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+  ['dragleave', 'drop'].forEach(ev => {
+    uploadZone.addEventListener(ev, (e) => {
+      e.preventDefault(); e.stopPropagation();
       uploadZone.classList.remove('dragover');
     });
   });
@@ -369,26 +441,19 @@
   uploadZone.addEventListener('drop', (e) => {
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      // DataTransfer를 활용한 안전한 fileInput 파일 동기화
       const dt = new DataTransfer();
       dt.items.add(files[0]);
       fileInput.files = dt.files;
-
       handleFileSelect(files[0]);
     }
   });
 
-  // 입력 발생 시 제출 버튼 활성화 여부 체크
   adminPasswordInput.addEventListener('input', checkCanSubmit);
   monthInput.addEventListener('input', checkCanSubmit);
-  
   adminPasswordInput.addEventListener('keyup', (e) => {
-    if (e.key === 'Enter' && !uploadBtn.disabled) {
-      uploadBtn.click();
-    }
+    if (e.key === 'Enter' && !uploadBtn.disabled) uploadBtn.click();
   });
 
-  // 파일 선택 시 화면 UI 처리
   function handleFileSelect(file) {
     selectedFile = file;
     uploadText.innerText = "선택된 파일:";
@@ -397,48 +462,35 @@
     checkCanSubmit();
   }
 
-  // 제출 가능 상태 체크
   function checkCanSubmit() {
     const password = adminPasswordInput.value.trim();
     const selectedMonth = monthInput.value;
-    if (selectedFile && password.length > 0 && selectedMonth !== "") {
-      uploadBtn.disabled = false;
-    } else {
-      uploadBtn.disabled = true;
-    }
+    uploadBtn.disabled = !(selectedFile && password.length > 0 && selectedMonth !== "");
   }
 
-  // Firebase 저장 이벤트
+  // ─────────────────────────────────────────────────
+  // 저장 핸들러
+  // ─────────────────────────────────────────────────
   uploadBtn.addEventListener('click', async () => {
     const enteredPassword = adminPasswordInput.value.trim();
-    const selectedMonth = monthInput.value;
+    const selectedMonth   = monthInput.value;
 
-    if (!selectedMonth) {
-      alert("저장할 년-월을 먼저 선택해 주세요.");
-      return;
-    }
-    if (!selectedFile) {
-      alert("먼저 엑셀 파일을 선택해 주세요.");
-      return;
-    }
-    if (!enteredPassword) {
-      alert("비밀번호를 입력해 주세요.");
-      return;
-    }
+    if (!selectedMonth) { alert("저장할 년-월을 먼저 선택해 주세요."); return; }
+    if (!selectedFile)  { alert("먼저 엑셀 파일을 선택해 주세요."); return; }
+    if (!enteredPassword) { alert("비밀번호를 입력해 주세요."); return; }
 
     uploadBtn.disabled = true;
     showStatus("🔑 비밀번호 확인 및 데이터 처리 중...", "loading");
 
     try {
       const pwdSnapshot = await get(ref(db, 'admin/password'));
-      
       if (!pwdSnapshot.exists()) {
         showStatus("❌ 서버에 관리자 비밀번호가 설정되어 있지 않습니다.", "error");
         uploadBtn.disabled = false;
         return;
       }
 
-      const realPassword = String(pwdSnapshot.val());
+      const realPassword      = String(pwdSnapshot.val());
       const convertedPassword = convertKorToEng(enteredPassword);
 
       if (enteredPassword !== realPassword && convertedPassword !== realPassword) {
@@ -450,50 +502,80 @@
       showStatus("⏳ 엑셀을 읽어 Firebase 서버에 저장 중입니다...", "loading");
 
       const reader = new FileReader();
-      
+
       reader.onload = async (e) => {
         try {
-          const data = new Uint8Array(e.target.result);
+          const data     = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
 
-          const firstSheetName = workbook.SheetNames[0];
-          const secondSheetName = workbook.SheetNames[1];
+          const [firstSheetName, secondSheetName] = workbook.SheetNames;
 
-          // 1. 시트 1 (월별 당직 데이터) 처리
-          const worksheet = workbook.Sheets[firstSheetName];
-          worksheet['!ref'] = "B1:K50";
-          const rawJsonData1 = XLSX.utils.sheet_to_json(worksheet, {
+          // ── 시트1: 월별 당직 데이터 가공 후 저장 ──────────────────────
+          const ws1  = workbook.Sheets[firstSheetName];
+          ws1['!ref'] = "B5:K50";
+
+          const raw1 = XLSX.utils.sheet_to_json(ws1, {
+            header: [
+              "dateStr",
+              "dayOfWeek",
+              "isHoliday",
+              "leaderRank",
+              "leaderName",
+              "worker1Rank",
+              "worker1Name",
+              "worker2Rank",
+              "worker2Name",
+              "shiftType"
+            ],
             raw: false,
             defval: ""
           });
-          const jsonData = sanitizeKeys(rawJsonData1);
 
-          const targetRef = ref(db, `gwanak-on/${selectedMonth}`);
-          await set(targetRef, jsonData);
+          const processedData1 = processSheet1(raw1);
+          await set(ref(db, `gwanak-on/${selectedMonth}`), { list: processedData1, rawHeader: `당직상황근무지정 ${firstSheetName}` });
 
-          // 2. 시트 2 (1년치 기본 당직 데이터) 처리 및 중복 체크 후 저장
+          // ── 시트2: 1년치 기본 당직 → 월별 분리 가공 후 저장 ────────────
           let defaultStatusMsg = "";
+
           if (secondSheetName) {
-            const worksheet2 = workbook.Sheets[secondSheetName];
-            worksheet2['!ref'] = "A3:M500";
-            const rawJsonData2 = XLSX.utils.sheet_to_json(worksheet2, {
+            const ws2 = workbook.Sheets[secondSheetName];
+            ws2['!ref'] = "A5:I500";
+
+            const raw2 = XLSX.utils.sheet_to_json(ws2, {
+              header: [
+                "dateStr",
+                "dayOfWeek",
+                "isHoliday",
+                "leaderRank",
+                "leaderName",
+                "worker1Rank",
+                "worker1Name",
+                "worker2Rank",
+                "worker2Name",
+                "shiftType"
+              ],
               raw: false,
               defval: ""
             });
-            const jsonData2 = sanitizeKeys(rawJsonData2);
 
-            const targetYear = selectedMonth.split('-')[0];
-            const defaultRef = ref(db, `gwanak-on/defaultData/${targetYear}`);
-            const defaultSnapshot = await get(defaultRef);
+            const monthlyData = processSheet2(raw2);
+            const savedMonths = [];
 
-            if (!defaultSnapshot.exists()) {
-              await set(defaultRef, jsonData2);
-              defaultStatusMsg = `\n(${targetYear}년도 기본 당직리스트 신규 저장 완료)`;
+            for (const [monthKey, monthData] of Object.entries(monthlyData)) {
+              const defaultRef = ref(db, `gwanak-on/defaultData/${monthKey}`);
+              const snap = await get(defaultRef);
+              if (!snap.exists()) {
+                await set(defaultRef, monthData);
+                savedMonths.push(monthKey);
+              }
+            }
+
+            if (savedMonths.length > 0) {
+              defaultStatusMsg = `\n(기본 당직 신규 저장: ${savedMonths.join(', ')})`;
             }
           }
 
           showStatus(`✅ [${selectedMonth}] 데이터 저장에 성공했습니다!${defaultStatusMsg}`, "success");
-
           adminPasswordInput.value = "";
           checkCanSubmit();
 
