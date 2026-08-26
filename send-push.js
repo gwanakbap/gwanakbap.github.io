@@ -18,7 +18,6 @@ function sanitizeKey(key) {
   return (key || "").replace(/[.#$\[\]\/]/g, "_");
 }
 
-// 만료되었거나 앱 삭제 등으로 유효하지 않은 FCM 토큰 에러 코드 목록
 const INVALID_TOKEN_ERROR_CODES = [
   'messaging/registration-token-not-registered',
   'messaging/invalid-registration-token',
@@ -37,7 +36,8 @@ async function main() {
 
   console.log(`[알림 스케줄러 시작] 대상 날짜(내일 KST): ${year}-${month}-${day}`);
 
-  const dutyRef = db.ref(`gwanak-on/${year}-${month}`);
+  // 1. 변경된 DB 경로: gwanak-on/YYYY-MM/list
+  const dutyRef = db.ref(`gwanak-on/${year}-${month}/list`);
   const tokenRef = db.ref('push_tokens');
 
   const [dutySnap, tokenSnap] = await Promise.all([
@@ -55,14 +55,11 @@ async function main() {
 
   const dutyList = Array.isArray(dutyRaw) ? dutyRaw : Object.values(dutyRaw);
 
+  // 2. 내일 날짜 대상 데이터 추출
   const tomorrowDuties = dutyList.filter(item => {
-    let dateStr = item["dateStr"] || "";
-    if (!dateStr) {
-      const foundKey = Object.keys(item).find(k => k.includes("당직상황근무지정"));
-      if (foundKey) dateStr = item[foundKey];
-    }
-    const parts = dateStr.split('/');
-    const itemDay = parts.length > 1 ? parseInt(parts[1], 10) : 0;
+    if (!item) return false;
+    const parts = (item.dateStr || "").split('/');
+    const itemDay = parts.length > 1 ? parseInt(parts[1], 10) : item.day;
     return itemDay === day;
   });
 
@@ -71,12 +68,13 @@ async function main() {
     process.exit(0);
   }
 
+  // 3. 근무 대상자 추출 (정제된 속성명 사용)
   const targets = [];
   tomorrowDuties.forEach(d => {
-    const shiftType = d["__EMPTY_8"] || d["shiftType"] || "당직";
-    const leaderName = (d["__EMPTY_3"] || d["leaderName"] || "").replace(/\s/g, '');
-    const worker1Name = (d["__EMPTY_5"] || d["worker1Name"] || "").replace(/\s/g, '');
-    const worker2Name = (d["__EMPTY_7"] || d["worker2Name"] || "").replace(/\s/g, '');
+    const shiftType = d.shiftType || "당직";
+    const leaderName = (d.leaderName || "").replace(/\s/g, '');
+    const worker1Name = (d.worker1Name || "").replace(/\s/g, '');
+    const worker2Name = (d.worker2Name || "").replace(/\s/g, '');
 
     [leaderName, worker1Name, worker2Name].forEach(name => {
       if (name) targets.push({ name, shiftType });
@@ -96,19 +94,18 @@ async function main() {
       continue;
     }
 
-    // 메시지 객체 생성 헬퍼
     const buildMessage = (token, deviceId) => ({
       token,
       userName: target.name,
       userKey: safeKey,
-      deviceId, // 기기별 삭제를 위해 보관 (null이면 구형 flat 구조)
+      deviceId,
       notification: {
         title: '[당직 안내]',
         body: `${target.name}님, 내일은 당직 근무일입니다. 근무 시간을 확인해 주세요.`
       },
       webpush: {
         notification: {
-          icon: './gwanakonIcon.png'
+          icon: '/gwanakon/gwanakonIcon-512.png'
         },
         fcmOptions: {
           link: "./"
@@ -116,15 +113,12 @@ async function main() {
       }
     });
 
-    // 1. 구형(flat) 구조: push_tokens/{safeKey} = { token, enabled, ... }
     if (userTokenData.token) {
       if (userTokenData.enabled !== false) {
         messages.push(buildMessage(userTokenData.token, null));
       }
     } else {
-      // 2. 신형(nested) 구조: push_tokens/{safeKey}/{deviceId} = { token, enabled, ... }
       Object.entries(userTokenData).forEach(([deviceId, deviceData]) => {
-        // enabled가 false인 기기는 제외
         if (deviceData?.token && deviceData?.enabled !== false) {
           messages.push(buildMessage(deviceData.token, deviceId));
         }
@@ -143,13 +137,11 @@ async function main() {
 
   console.log(`총 ${messages.length}건의 푸시 알림 발송을 시도합니다...`);
 
-  // FCM 페이로드에서 내부 메타데이터(userName, userKey, deviceId) 제거 후 발송
   const fcmPayloads = messages.map(({ userName, userKey, deviceId, ...payload }) => payload);
   const response = await admin.messaging().sendEach(fcmPayloads);
 
   console.log(`발송 결과 - 성공: ${response.successCount}건, 실패: ${response.failureCount}건`);
 
-  // 2번 방법: 발송 실패 건 중 앱 삭제/토큰 만료 건 DB 정제 처리
   if (response.failureCount > 0) {
     const cleanupPromises = [];
 
@@ -159,15 +151,12 @@ async function main() {
         const targetUser = messages[i];
         console.error(`[발송 실패] ${targetUser.userName} (${errCode}):`, resp.error?.message);
 
-        // 무효하거나 삭제된 토큰 에러 감지
         if (INVALID_TOKEN_ERROR_CODES.includes(errCode)) {
           console.log(`[토큰 삭제 예약] ${targetUser.userName}의 무효한 토큰 DB 삭제 진행`);
 
           if (targetUser.deviceId) {
-            // 신형 nested 구조: 해당 기기 노드만 삭제
             cleanupPromises.push(db.ref(`push_tokens/${targetUser.userKey}/${targetUser.deviceId}`).remove());
           } else {
-            // 구형 flat 구조: 사용자 노드 전체 삭제
             cleanupPromises.push(db.ref(`push_tokens/${targetUser.userKey}`).remove());
           }
         }
