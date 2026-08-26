@@ -68,9 +68,9 @@ const todayMonth = now.getMonth() + 1;
 const todayDay = now.getDate();
 const weekDays = ['일', '월', '화', '수', '목', '금', '토'];
 
-// 탭 조회를 위한 상태 관리 (0: 이번 달, 1: 다음 달)
-let currentViewOffset = 0; 
+// 월별 조회 및 데이터 관리 상태
 let currentDbUnsubscribe = null;
+let currentRenderId = "";
 let lastRawDataJson = "";
 
 let targetYear = todayYear;
@@ -84,20 +84,12 @@ const usernameInput = document.getElementById('username-input');
 const btnSaveUsername = document.getElementById('btn-save-username');
 const notificationToggle = document.getElementById('notification-toggle');
 
-// 탭 스위치 버튼 엘리먼트
-const btnThisMonth = document.getElementById('btn-this-month');
-const btnNextMonth = document.getElementById('btn-next-month');
-
 if (usernameInput) usernameInput.value = currentUsername;
 
 document.getElementById('nav-btn-0')?.addEventListener('click', () => goToPage(0));
 document.getElementById('nav-btn-1')?.addEventListener('click', () => goToPage(1));
 document.getElementById('nav-btn-2')?.addEventListener('click', () => goToPage(2));
 btnSaveUsername?.addEventListener('click', saveUsername);
-
-// 탭 스위치 클릭 이벤트 바인딩
-btnThisMonth?.addEventListener('click', () => switchMonthTab(0));
-btnNextMonth?.addEventListener('click', () => switchMonthTab(1));
 
 // 앱 오픈(Foreground) 중 알림 수신
 if (messaging) {
@@ -147,6 +139,7 @@ window.addEventListener('resize', () => {
   goToPage(currentIndex);
 });
 
+// 메인 화면 전체 좌우 스와이프 (페이지 전환)
 let startX = 0, startY = 0, currentTranslate = 0, prevTranslate = 0, isDragging = false, isHorizontalSwipe = null;
 
 function getPositionX(e) { return e.type.includes('mouse') ? e.clientX : e.touches[0].clientX; }
@@ -358,15 +351,9 @@ async function disableNotificationPermission() {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// [변경] admin.html이 이미 가공된 { list, rawHeader } 구조로 저장하므로
-//        앱에서는 해당 구조를 그대로 읽어 반환하기만 합니다.
-//        기존의 __EMPTY 키 매핑 및 헤더 추출 로직은 모두 제거되었습니다.
-// ─────────────────────────────────────────────────────────────────
 function processRawData(rawData) {
   if (!rawData) return { list: [], rawHeader: '' };
 
-  // Firebase에 저장된 포맷: { list: [...], rawHeader: '...' }
   const rawHeader = rawData.rawHeader || '';
   const rawList   = rawData.list;
 
@@ -377,9 +364,9 @@ function processRawData(rawData) {
   const list = arr
     .filter(item => item && String(item.dateStr || '').trim() !== '')
     .map(item => ({
-      dateStr:     String(item.dateStr    || '').trim(),
-      day:         Number(item.day)       || 0,
-      dayOfWeek:   String(item.dayOfWeek  || '').trim(),
+      dateStr:     String(item.dateStr     || '').trim(),
+      day:         Number(item.day)        || 0,
+      dayOfWeek:   String(item.dayOfWeek   || '').trim(),
       isHoliday:   item.isHoliday === true,
       leaderRank:  String(item.leaderRank  || '').trim(),
       leaderName:  String(item.leaderName  || '').replace(/\s/g, ''),
@@ -394,11 +381,9 @@ function processRawData(rawData) {
   return { list, rawHeader };
 }
 
-// [수정] targetYear/targetMonth를 외부에서 변경하지 않고 렌더링에만 집중하도록 수정
 function applyDataToUI(list, rawHeader) {
   dutyData = list;
 
-  // 오늘 날짜 선택 여부 결정 (현재 보고 있는 년/월이 이번 달인 경우 오늘 날짜 선택)
   if (targetYear === todayYear && targetMonth === todayMonth) {
     selectedDay = todayDay;
   } else {
@@ -406,41 +391,58 @@ function applyDataToUI(list, rawHeader) {
   }
 
   const headerElem = document.getElementById('app-header');
-  const titleElem = document.getElementById('calendar-title');
   if (headerElem) headerElem.innerText = rawHeader || `당직상황근무지정 ${targetMonth}월`;
-  if (titleElem) titleElem.innerText = `${targetYear}년 ${targetMonth}월`;
+
+  // 캘린더 타이틀 헤더 UI 업데이트 (좌우 화살표 버튼 적용)
+  const titleElem = document.getElementById('calendar-title');
+  if (titleElem) {
+    const isMinMonth = (targetYear === todayYear && targetMonth <= todayMonth);
+    const isMaxMonth = (targetYear === todayYear && targetMonth >= 12);
+
+    titleElem.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: center; gap: 16px; user-select: none;">
+        <button id="btn-calendar-prev" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-main, #333); padding: 4px 12px; border-radius: 8px; visibility: ${isMinMonth ? 'hidden' : 'visible'};">‹</button>
+        <span style="font-weight: 600; font-size: 18px;">${targetYear}년 ${targetMonth}월</span>
+        <button id="btn-calendar-next" style="background:none; border:none; font-size:20px; cursor:pointer; color:var(--text-main, #333); padding: 4px 12px; border-radius: 8px; visibility: ${isMaxMonth ? 'hidden' : 'visible'};">›</button>
+      </div>
+    `;
+
+    document.getElementById('btn-calendar-prev')?.addEventListener('click', () => changeMonth(-1));
+    document.getElementById('btn-calendar-next')?.addEventListener('click', () => changeMonth(1));
+  }
 
   renderCalendar();
   renderDutyInfo();
 }
 
-// 선택된 탭(0: 이번 달, 1: 다음 달) 데이터 연동 처리
-function switchMonthTab(offset) {
-  currentViewOffset = offset;
+// 좌우 버튼을 통한 월 변경 처리
+window.changeMonth = function(delta) {
+  let nextMonth = targetMonth + delta;
+  let nextYear = targetYear;
 
-  // 탭 버튼 UI 업데이트
-  if (btnThisMonth) btnThisMonth.classList.toggle('active', offset === 0);
-  if (btnNextMonth) btnNextMonth.classList.toggle('active', offset === 1);
+  // 올해 남은 달(이번 달 ~ 12월) 범위 제한
+  if (nextYear === todayYear && nextMonth < todayMonth) return;
+  if (nextYear === todayYear && nextMonth > 12) return;
 
-  // 연월 계산
-  let calcMonth = todayMonth + offset;
-  let calcYear = todayYear;
-  if (calcMonth > 12) {
-    calcMonth -= 12;
-    calcYear += 1;
-  }
+  loadMonthData(nextYear, nextMonth);
+};
 
-  targetYear = calcYear;
-  targetMonth = calcMonth;
+// 월별 데이터 로드 (Firebase RTDB + 대체 경로 백업)
+function loadMonthData(year, month) {
+  targetYear = year;
+  targetMonth = month;
 
-  // 이전 실시간 리스너 구독 해제
+  const currentYearStr = String(targetYear);
+  const currentMonthStr = String(targetMonth).padStart(2, '0');
+  const reqId = `${currentYearStr}-${currentMonthStr}`;
+  currentRenderId = reqId;
+
   if (currentDbUnsubscribe) {
     currentDbUnsubscribe();
     currentDbUnsubscribe = null;
   }
 
-  // 월별 캐시 데이터 로드
-  const cacheKey = `duty_cached_data_${targetYear}_${targetMonth}`;
+  const cacheKey = `duty_cached_data_${currentYearStr}_${currentMonthStr}`;
   const cachedJson = localStorage.getItem(cacheKey) || "";
   lastRawDataJson = cachedJson;
 
@@ -458,26 +460,17 @@ function switchMonthTab(offset) {
     if (headerElem) headerElem.innerText = `${targetYear}년 ${targetMonth}월 (불러오는 중...)`;
   }
 
-  // 새로운 월 Firebase RTDB 연동
-  const currentYearStr = String(targetYear);
-  const currentMonthStr = String(targetMonth).padStart(2, '0');
   const dbPath = `gwanak-on/${currentYearStr}-${currentMonthStr}`;
   const dbRef = ref(db, dbPath);
 
-  // 현재 요청한 탭의 offset 저장
-  const requestedOffset = offset;
-
-  // [수정된 부분] gwanak-on 데이터가 없을 경우 gwanakon/defaultData/YYYY-MM을 바로 조회하도록 수정
   currentDbUnsubscribe = onValue(dbRef, async (snapshot) => {
-    // [비동기 안전 검증] 사용자가 클릭한 현재 탭과 응답이 일치하지 않으면 무시
-    if (currentViewOffset !== requestedOffset) return;
+    if (currentRenderId !== reqId) return;
 
     let val = snapshot.val();
 
-    // 1. gwanak-on/YYYY-MM 에 데이터가 없을 경우 gwanakon/defaultData/YYYY-MM 조회
+    // 1. gwanak-on/YYYY-MM 에 없을 경우 gwanak-on/defaultData/YYYY-MM 조회
     if (!val) {
       try {
-        // 경로 수정됨: gwanakon/defaultData/
         const defaultDbPath = `gwanak-on/defaultData/${currentYearStr}-${currentMonthStr}`;
         const defaultSnap = await get(ref(db, defaultDbPath));
         val = defaultSnap.val();
@@ -486,7 +479,7 @@ function switchMonthTab(offset) {
       }
     }
 
-    // 2. gwanakon/defaultData/YYYY-MM 에도 데이터가 없다면 '업데이트 예정' 처리
+    // 2. 대체 경로에도 없으면 '업데이트 예정'
     if (!val) {
       lastRawDataJson = "";
       localStorage.removeItem(cacheKey);
@@ -496,7 +489,7 @@ function switchMonthTab(offset) {
       return;
     }
 
-    // 3. 데이터를 성공적으로 불러온 경우 UI 적용 및 캐시 저장
+    // 3. 정상 데이터 적용
     const currentRawDataJson = JSON.stringify(val);
     if (currentRawDataJson === lastRawDataJson && dutyData.length > 0) return;
 
@@ -508,8 +501,8 @@ function switchMonthTab(offset) {
   });
 }
 
-// 최초 실행: 기본값으로 '이번 달(0)' 로드
-switchMonthTab(0);
+// 최초 데이터 로드 (현재 연월)
+loadMonthData(todayYear, todayMonth);
 
 function renderCalendar() {
   const grid = document.getElementById('calendar-grid');
