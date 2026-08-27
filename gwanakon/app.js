@@ -86,9 +86,11 @@ const notificationToggle = document.getElementById('notification-toggle');
 
 if (usernameInput) usernameInput.value = currentUsername;
 
-document.getElementById('nav-btn-0')?.addEventListener('click', () => goToPage(0));
-document.getElementById('nav-btn-1')?.addEventListener('click', () => goToPage(1));
-document.getElementById('nav-btn-2')?.addEventListener('click', () => goToPage(2));
+// 네비게이션 버튼 클릭 이벤트 연결 (0 ~ 3번 탭 일괄 바인딩)
+navItems.forEach((item, idx) => {
+  item.addEventListener('click', () => goToPage(idx));
+});
+
 btnSaveUsername?.addEventListener('click', saveUsername);
 
 // 앱 오픈(Foreground) 중 알림 수신
@@ -124,7 +126,7 @@ if (notificationToggle) {
 }
 
 let currentIndex = 1;
-const totalPages = 3;
+const totalPages = 4; // 🟢 총 4개 페이지로 수정 (0: 달력, 1: 당직안내, 2: 설정, 3: 기타)
 
 function goToPage(index) {
   if (index < 0 || index >= totalPages) return;
@@ -134,6 +136,9 @@ function goToPage(index) {
   track.style.transform = `translateX(${translateVal}px)`;
   navItems.forEach((item, idx) => item.classList.toggle('active', idx === currentIndex));
 }
+
+// global 접근이 필요한 경우를 위한 전역 등록
+window.goToPage = goToPage;
 
 window.addEventListener('resize', () => {
   goToPage(currentIndex);
@@ -659,7 +664,7 @@ function renderDutyInfo() {
           <p style="color:var(--text-sub); font-size:14px; text-align:center; margin: 0 0 15px 0; line-height: 1.4;">
             설정에서 본인의 이름을 등록하시면<br>이번 달 남은 당직일을 모두 알려드립니다.
           </p>
-          <button class="btn-save" style="width: auto; padding: 8px 20px; font-size: 14px; border-radius: 20px; cursor: pointer;" onclick="document.getElementById('nav-btn-2')?.click()">
+          <button class="btn-save" style="width: auto; padding: 8px 20px; font-size: 14px; border-radius: 20px; cursor: pointer;" onclick="goToPage(2)">
             ⚙️ 이름 설정하러 가기
           </button>
         </div>

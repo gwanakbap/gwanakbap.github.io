@@ -72,17 +72,20 @@ header {
     cursor: grab;
 }
 .swipe-viewport:active { cursor: grabbing; }
+
+/* 🟢 수정됨: 페이지가 4개이므로 width를 300%에서 400%로 변경 */
 .swipe-track {
     display: flex;
-    width: 300%;
+    width: 400%;
     height: 100%;
     transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
     will-change: transform;
 }
 .swipe-track.dragging { transition: none; }
 
+/* 🟢 수정됨: 페이지가 4개이므로 각 페이지 너비를 33.3333%에서 25%로 변경 */
 .view-page {
-    width: 33.3333%;
+    width: 25%;
     height: 100%;
     min-height:0;
     overflow-y: auto;
@@ -431,4 +434,135 @@ header {
     z-index: 9999;
     transition: all 0.3s ease;
     -webkit-tap-highlight-color: transparent;
+}
+
+/* --- 기타 탭(정보 탭) 전용 스타일 --- */
+
+.info-header {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.info-sub {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+/* 2x2 그리드 (비상근무 편성표) */
+.grid-2col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+.team-box {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px;
+}
+/* 특정 조 및 긴급지원단 필수/A조 강조 클래스 (.target-team) */
+.team-box.target-team,
+.support-group.target-team {
+    background: #fff1f2;
+    border-color: #fecdd3;
+}
+.team-box.target-team .team-name,
+.support-group.target-team .group-title { color: var(--primary-color); }
+
+.team-name {
+    font-size: 13px;
+    font-weight: 800;
+    color: #334155;
+    margin-bottom: 4px;
+    text-align: center;
+}
+.team-members {
+    font-size: 11px;
+    color: #64748b;
+    line-height: 1.4;
+    text-align: center;
+    word-break: keep-all;
+}
+
+/* 다음 차례 강조 박스 */
+.next-turn-box {
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.next-turn-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1e3a8a;
+}
+.next-turn-value {
+    font-size: 15px;
+    font-weight: 800;
+    color: #2563eb;
+    background: #ffffff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+/* 스크롤 가능한 리스트 박스 */
+.scroll-list-box {
+    max-height: 120px;
+    overflow-y: auto;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+}
+.compact-list {
+    list-style: none;
+    padding: 0; margin: 0;
+}
+.compact-list li {
+    display: flex;
+    padding: 6px 10px;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 12px;
+    color: var(--text-sub);
+}
+.compact-list li:last-child { border-bottom: none; }
+.compact-list li.highlight {
+    background-color: #ffe4e6;
+    color: var(--primary-color);
+    font-weight: 700;
+}
+.list-num { width: 30px; font-weight: 700; color: #94a3b8; }
+.list-name { flex: 1; font-weight: 600; color: var(--text-main); }
+.list-date { width: 70px; text-align: right; font-size: 11px; }
+
+/* 긴급지원단 배지 그룹 */
+.support-group { background: #ffffff; border: 1px solid transparent; border-radius: 8px; padding: 4px; }
+.mt-2 { margin-top: 12px; }
+.group-title {
+    font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;
+    display: flex;
+}
+.group-title span { padding-left: 6px; font-weight: 600; color: #64748b; font-size: 11px; }
+.badge-wrap {
+    display: flex; flex-wrap: wrap; gap: 5px;
+}
+.info-badge {
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
 }
