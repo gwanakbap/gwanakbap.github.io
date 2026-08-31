@@ -1,0 +1,13 @@
+{
+  "name": "과낙밥",
+  "start_url": "/gwanakbap/",
+  "display": "standalone",
+  "scope": "/gwanakbap/",
+  "icons": [
+    {
+      "src": "./gwanakbapIcon.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}
