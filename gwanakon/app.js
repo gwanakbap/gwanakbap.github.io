@@ -83,6 +83,23 @@ const navItems = document.querySelectorAll('.nav-item');
 const usernameInput = document.getElementById('username-input');
 const btnSaveUsername = document.getElementById('btn-save-username');
 const notificationToggle = document.getElementById('notification-toggle');
+const weekToggle = document.getElementById('notification-week-toggle');
+
+const KEY_DAY = 'duty_notification_enabled';        // 하루 전 (기존 키 유지)
+const KEY_WEEK = 'duty_notification_week_enabled';  // 일주일 전
+const isOn = (k) => localStorage.getItem(k) === 'true';
+
+const VAPID_KEY = 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A';
+
+function buildTokenRecord(token) {
+  return {
+    token,
+    enabled: true, // 구버전 호환
+    dayBefore: isOn(KEY_DAY),
+    weekBefore: isOn(KEY_WEEK),
+    updatedAt: new Date().toISOString()
+  };
+}
 
 if (usernameInput) usernameInput.value = currentUsername;
 
@@ -104,25 +121,32 @@ if (messaging) {
 }
 
 // 알림 토글 스위치 이벤트
-if (notificationToggle) {
+[ [notificationToggle, KEY_DAY], [weekToggle, KEY_WEEK] ].forEach(([toggle, key]) => {
+  if (!toggle) return;
   if (!notifSupported) {
-    notificationToggle.disabled = true;
-    notificationToggle.checked = false;
-  } else {
-    notificationToggle.addEventListener('change', async (e) => {
-      if (e.target.checked) {
-        await requestNotificationPermission();
-      } else {
-        await disableNotificationPermission();
-      }
-    });
-
-    if (Notification.permission === 'granted' && localStorage.getItem('duty_notification_enabled') === 'true') {
-      notificationToggle.checked = true;
-    } else {
-      notificationToggle.checked = false;
-    }
+    toggle.disabled = true;
+    toggle.checked = false;
+    return;
   }
+
+  toggle.checked = Notification.permission === 'granted' && isOn(key);
+
+  toggle.addEventListener('change', async () => {
+    localStorage.setItem(key, String(toggle.checked));
+    const ok = await syncNotification();
+    if (!ok && toggle.checked) {   // 실패 시 되돌리기
+      toggle.checked = false;
+      localStorage.setItem(key, 'false');
+    }
+  });
+});
+
+async function syncNotification() {
+  if (!isOn(KEY_DAY) && !isOn(KEY_WEEK)) {
+    await disableNotificationPermission();
+    return true;
+  }
+  return await requestNotificationPermission();
 }
 
 let currentIndex = 1;
@@ -246,62 +270,47 @@ async function cleanDuplicateTokens(targetToken, keepSafeKey, keepDeviceId) {
 async function requestNotificationPermission() {
   if (!notifSupported) {
     alert('이 환경에서는 알림을 지원하지 않습니다.\n설치(홈 화면에 추가) 후 이용해 주세요.');
-    if (notificationToggle) notificationToggle.checked = false;
     return false;
   }
 
   if (!currentUsername) {
     alert('이름을 먼저 설정해주세요.');
-    if (notificationToggle) notificationToggle.checked = false;
-    const input = document.getElementById('username-input');
-    if (input) input.focus();
+    document.getElementById('username-input')?.focus();
     return false;
   }
 
   try {
     const permission = await Notification.requestPermission();
 
-    if (permission === 'granted') {
-      localStorage.setItem('duty_notification_enabled', 'true');
-
-      if (messaging) {
-        const swReg = await navigator.serviceWorker.ready;
-        const currentToken = await getToken(messaging, {
-          vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
-          serviceWorkerRegistration: swReg
-        });
-
-        if (currentToken) {
-          const safeKey = sanitizeKey(currentUsername);
-          const deviceId = getOrCreateDeviceId();
-
-          await set(ref(db, `push_tokens/${safeKey}/${deviceId}`), {
-            token: currentToken,
-            enabled: true,
-            updatedAt: new Date().toISOString()
-          });
-
-          await cleanDuplicateTokens(currentToken, safeKey, deviceId);
-          console.log(`[성공] FCM 토큰 등록 및 DB 저장 완료: ${safeKey}`);
-        }
-      }
-      return true;
-    } else {
+    if (permission !== 'granted') {
       alert("알림 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해 주세요.");
-      if (notificationToggle) notificationToggle.checked = false;
-      await disableNotificationPermission();
       return false;
     }
+
+    if (messaging) {
+      const swReg = await navigator.serviceWorker.ready;
+      const currentToken = await getToken(messaging, {
+        vapidKey: VAPID_KEY,
+        serviceWorkerRegistration: swReg
+      });
+
+      if (currentToken) {
+        const safeKey = sanitizeKey(currentUsername);
+        const deviceId = getOrCreateDeviceId();
+
+        await set(ref(db, `push_tokens/${safeKey}/${deviceId}`), buildTokenRecord(currentToken));
+        await cleanDuplicateTokens(currentToken, safeKey, deviceId);
+        console.log(`[성공] FCM 토큰 등록 및 DB 저장 완료: ${safeKey}`);
+      }
+    }
+    return true;
   } catch (err) {
     console.error("FCM 토큰 획득/저장 실패:", err);
-    if (notificationToggle) notificationToggle.checked = false;
     return false;
   }
 }
 
 async function disableNotificationPermission() {
-  localStorage.setItem('duty_notification_enabled', 'false');
-
   const deviceId = getOrCreateDeviceId();
   let currentToken = null;
 
@@ -309,7 +318,7 @@ async function disableNotificationPermission() {
     if (notifSupported && messaging) {
       const swReg = await navigator.serviceWorker.ready;
       currentToken = await getToken(messaging, {
-        vapidKey: 'BBO1aJYgUU6PyJe6ieQButDDavlvq0Yp1w7adMFaOQl13kKLKVNWNKyUJ1MqcWKGPdSmZyJfT806HTWxFvzSe6A',
+        vapidKey: VAPID_KEY,
         serviceWorkerRegistration: swReg
       });
     }
@@ -747,7 +756,7 @@ async function saveUsername() {
   currentUsername = newName;
   localStorage.setItem('duty_app_username', newName);
 
-  const isNotificationEnabled = localStorage.getItem('duty_notification_enabled') === 'true';
+  const isNotificationEnabled = isOn(KEY_DAY) || isOn(KEY_WEEK);
   const deviceId = getOrCreateDeviceId();
 
   try {
@@ -766,11 +775,7 @@ async function saveUsername() {
       if (currentToken) {
         const newSafeKey = sanitizeKey(newName);
 
-        await set(ref(db, `push_tokens/${newSafeKey}/${deviceId}`), {
-          token: currentToken,
-          enabled: true,
-          updatedAt: new Date().toISOString()
-        });
+        await set(ref(db, `push_tokens/${newSafeKey}/${deviceId}`), buildTokenRecord(currentToken));
 
         await cleanDuplicateTokens(currentToken, newSafeKey, deviceId);
         console.log(`[성공] 새 이름(${newName})으로 토큰 DB 등록 완료`);

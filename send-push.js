@@ -24,110 +24,132 @@ const INVALID_TOKEN_ERROR_CODES = [
   'messaging/invalid-argument'
 ];
 
-async function main() {
-  const now = new Date();
-  const utcMs = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
-  const kstTomorrow = new Date(utcMs + (9 * 60 * 60 * 1000));
-  kstTomorrow.setDate(kstTomorrow.getDate() + 1);
+// 알림 종류 정의
+const NOTIFY_TYPES = [
+  {
+    label: '하루 전',
+    offsetDays: 1,
+    // 구버전 토큰(dayBefore 필드 없음)은 하루 전 알림 ON으로 간주
+    isEnabled: (d) => d?.token && d.enabled !== false && d.dayBefore !== false,
+    body: (name) => `${name}님, 내일은 당직 근무일입니다. 일정을 확인해 주세요.`
+  },
+  {
+    label: '일주일 전',
+    offsetDays: 7,
+    isEnabled: (d) => d?.token && d.enabled !== false && d.weekBefore === true,
+    body: (name) => `${name}님, 일주일 뒤에 당직 근무일입니다. 일정을 확인해 주세요.`
+  }
+];
 
-  const year = kstTomorrow.getFullYear();
-  const month = String(kstTomorrow.getMonth() + 1).padStart(2, '0');
-  const day = kstTomorrow.getDate();
+// KST 기준 offset일 뒤 날짜
+function getKstDate(offsetDays) {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  kst.setUTCDate(kst.getUTCDate() + offsetDays);
+  return {
+    year: kst.getUTCFullYear(),
+    month: String(kst.getUTCMonth() + 1).padStart(2, '0'),
+    day: kst.getUTCDate()
+  };
+}
 
-  console.log(`[알림 스케줄러 시작] 대상 날짜(내일 KST): ${year}-${month}-${day}`);
+async function collectMessages(type, tokens, monthCache) {
+  const { year, month, day } = getKstDate(type.offsetDays);
+  const monthKey = `${year}-${month}`;
+  console.log(`[${type.label}] 대상 날짜(KST): ${year}-${month}-${day}`);
 
-  // 1. 변경된 DB 경로: gwanak-on/YYYY-MM/list
-  const dutyRef = db.ref(`gwanak-on/${year}-${month}/list`);
-  const tokenRef = db.ref('push_tokens');
+  if (!(monthKey in monthCache)) {
+    const snap = await db.ref(`gwanak-on/${monthKey}/list`).once('value');
+    monthCache[monthKey] = snap.val();
+  }
 
-  const [dutySnap, tokenSnap] = await Promise.all([
-    dutyRef.once('value'),
-    tokenRef.once('value')
-  ]);
-
-  const dutyRaw = dutySnap.val();
-  const tokens = tokenSnap.val() || {};
-
+  const dutyRaw = monthCache[monthKey];
   if (!dutyRaw) {
-    console.log(`[종료] ${year}년 ${month}월 당직 데이터가 DB에 없습니다.`);
-    process.exit(0);
+    console.log(`[${type.label}] ${monthKey} 당직 데이터가 DB에 없습니다.`);
+    return [];
   }
 
   const dutyList = Array.isArray(dutyRaw) ? dutyRaw : Object.values(dutyRaw);
 
-  // 2. 내일 날짜 대상 데이터 추출
-  const tomorrowDuties = dutyList.filter(item => {
+  const duties = dutyList.filter(item => {
     if (!item) return false;
     const parts = (item.dateStr || "").split('/');
     const itemDay = parts.length > 1 ? parseInt(parts[1], 10) : item.day;
     return itemDay === day;
   });
 
-  if (tomorrowDuties.length === 0) {
-    console.log(`[종료] ${day}일 지정된 당직 정보가 없습니다.`);
-    process.exit(0);
+  if (duties.length === 0) {
+    console.log(`[${type.label}] ${day}일 지정된 당직 정보가 없습니다.`);
+    return [];
   }
 
-  // 3. 근무 대상자 추출 (정제된 속성명 사용)
-  const targets = [];
-  tomorrowDuties.forEach(d => {
-    const shiftType = d.shiftType || "당직";
-    const leaderName = (d.leaderName || "").replace(/\s/g, '');
-    const worker1Name = (d.worker1Name || "").replace(/\s/g, '');
-    const worker2Name = (d.worker2Name || "").replace(/\s/g, '');
-
-    [leaderName, worker1Name, worker2Name].forEach(name => {
-      if (name) targets.push({ name, shiftType });
+  // 같은 날 일직/숙직 중복 근무자는 한 번만
+  const names = new Set();
+  duties.forEach(d => {
+    [d.leaderName, d.worker1Name, d.worker2Name].forEach(n => {
+      const name = (n || "").replace(/\s/g, '');
+      if (name) names.add(name);
     });
   });
 
-  console.log("내일 근무 예정자:", targets);
+  console.log(`[${type.label}] 근무 예정자:`, [...names]);
 
   const messages = [];
 
-  for (const target of targets) {
-    const safeKey = sanitizeKey(target.name);
-    const userTokenData = tokens[safeKey];
+  const buildMessage = (token, name, userKey, deviceId) => ({
+    token,
+    userName: name,
+    userKey,
+    deviceId,
+    notification: {
+      title: '[당직 안내]',
+      body: type.body(name)
+    },
+    webpush: {
+      notification: { icon: '/gwanakon/gwanakonIcon-512.png' },
+      fcmOptions: { link: "./" }
+    }
+  });
+
+  for (const name of names) {
+    const userKey = sanitizeKey(name);
+    const userTokenData = tokens[userKey];
 
     if (!userTokenData) {
-      console.log(`[스킵] ${target.name} - DB에 토큰 없음`);
+      console.log(`[스킵][${type.label}] ${name} DB에 토큰 없음`);
       continue;
     }
 
-    const buildMessage = (token, deviceId) => ({
-      token,
-      userName: target.name,
-      userKey: safeKey,
-      deviceId,
-      notification: {
-        title: '[당직 안내]',
-        body: `${target.name}님, 내일은 당직 근무일입니다. 근무 시간을 확인해 주세요.`
-      },
-      webpush: {
-        notification: {
-          icon: '/gwanakon/gwanakonIcon-512.png'
-        },
-        fcmOptions: {
-          link: "./"
-        }
-      }
-    });
-
     if (userTokenData.token) {
-      if (userTokenData.enabled !== false) {
-        messages.push(buildMessage(userTokenData.token, null));
+      // 구버전 구조 (기기 구분 없음)
+      if (type.isEnabled(userTokenData)) {
+        messages.push(buildMessage(userTokenData.token, name, userKey, null));
       }
     } else {
+      let found = false;
       Object.entries(userTokenData).forEach(([deviceId, deviceData]) => {
-        if (deviceData?.token && deviceData?.enabled !== false) {
-          messages.push(buildMessage(deviceData.token, deviceId));
+        if (type.isEnabled(deviceData)) {
+          messages.push(buildMessage(deviceData.token, name, userKey, deviceId));
+          found = true;
         }
       });
-
-      if (!Object.values(userTokenData).some(d => d?.token && d?.enabled !== false)) {
-        console.log(`[스킵] ${target.name} - 유효하거나 활성화된 토큰 없음`);
+      if (!found) {
+        console.log(`[스킵][${type.label}] ${name} 해당 알림이 활성화된 토큰 없음`);
       }
     }
+  }
+
+  return messages;
+}
+
+async function main() {
+  const tokenSnap = await db.ref('push_tokens').once('value');
+  const tokens = tokenSnap.val() || {};
+
+  const monthCache = {};
+  const messages = [];
+
+  for (const type of NOTIFY_TYPES) {
+    messages.push(...await collectMessages(type, tokens, monthCache));
   }
 
   if (messages.length === 0) {
@@ -143,29 +165,24 @@ async function main() {
   console.log(`발송 결과 - 성공: ${response.successCount}건, 실패: ${response.failureCount}건`);
 
   if (response.failureCount > 0) {
-    const cleanupPromises = [];
+    const cleanupPaths = new Set();
 
     response.responses.forEach((resp, i) => {
-      if (!resp.success) {
-        const errCode = resp.error?.code;
-        const targetUser = messages[i];
-        console.error(`[발송 실패] ${targetUser.userName} (${errCode}):`, resp.error?.message);
+      if (resp.success) return;
+      const errCode = resp.error?.code;
+      const t = messages[i];
+      console.error(`[발송 실패] ${t.userName} (${errCode}):`, resp.error?.message);
 
-        if (INVALID_TOKEN_ERROR_CODES.includes(errCode)) {
-          console.log(`[토큰 삭제 예약] ${targetUser.userName}의 무효한 토큰 DB 삭제 진행`);
-
-          if (targetUser.deviceId) {
-            cleanupPromises.push(db.ref(`push_tokens/${targetUser.userKey}/${targetUser.deviceId}`).remove());
-          } else {
-            cleanupPromises.push(db.ref(`push_tokens/${targetUser.userKey}`).remove());
-          }
-        }
+      if (INVALID_TOKEN_ERROR_CODES.includes(errCode)) {
+        cleanupPaths.add(t.deviceId
+          ? `push_tokens/${t.userKey}/${t.deviceId}`
+          : `push_tokens/${t.userKey}`);
       }
     });
 
-    if (cleanupPromises.length > 0) {
-      await Promise.all(cleanupPromises);
-      console.log(`[토큰 정리 완료] 유효하지 않은 토큰 노드 ${cleanupPromises.length}개를 DB에서 성공적으로 삭제했습니다.`);
+    if (cleanupPaths.size > 0) {
+      await Promise.all([...cleanupPaths].map(p => db.ref(p).remove()));
+      console.log(`[토큰 정리 완료] 유효하지 않은 토큰 노드 ${cleanupPaths.size}개 삭제`);
     }
   }
 
