@@ -27,6 +27,11 @@
       user-select: none;
     }
 
+    input, textarea, select {
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
     body {
       background-color: #d1d5db;
       display: flex;
@@ -118,10 +123,6 @@
     .form-input:focus {
       border-color: var(--primary-color);
       background-color: #ffffff;
-    }
-
-    .password-mask {
-      -webkit-text-security: disc;
     }
 
     .upload-zone {
@@ -309,7 +310,7 @@
 
       <div class="form-group" style="margin-bottom: 0;">
         <label for="adminPassword" class="form-label">🔒 관리자 비밀번호</label>
-        <input type="text" id="adminPassword" class="form-input password-mask" placeholder="비밀번호를 입력하세요" autocomplete="off" />
+        <input type="password" id="adminPassword" class="form-input" placeholder="비밀번호를 입력하세요" autocomplete="new-password" />
       </div>
 
       <button id="uploadBtn" class="btn-primary" disabled>
@@ -350,7 +351,7 @@
 
       <div class="form-group" style="margin-bottom: 0;">
         <label for="etcPassword" class="form-label">🔒 관리자 비밀번호</label>
-        <input type="text" id="etcPassword" class="form-input password-mask" placeholder="비밀번호를 입력하세요" autocomplete="off" />
+        <input type="password" id="etcPassword" class="form-input" placeholder="비밀번호를 입력하세요" autocomplete="new-password" />
       </div>
 
       <button id="etcSaveBtn" class="btn-primary" disabled>
@@ -411,6 +412,39 @@
       }
     }
     return result;
+  }
+
+  // ─────────────────────────────────────────────────
+  // 한글 모드여도 영문으로 입력되게 (한/영 전환 효과)
+  // ─────────────────────────────────────────────────
+  function forceEnglishInput(input) {
+    const isHangulIme = (e) =>
+      e.isComposing || e.keyCode === 229 || /[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(e.key);
+
+    // PC: 한글 IME가 켜진 상태의 글자 키를 가로채서 영문자로 직접 입력
+    input.addEventListener('keydown', (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (!isHangulIme(e)) return;                       // 영문 모드는 그대로 둠
+      if (!e.code || !e.code.startsWith('Key')) return;  // 글자 키(A~Z)만 처리
+
+      let ch = e.code.slice(3).toLowerCase();
+      const upper = e.shiftKey !== e.getModifierState('CapsLock');
+      if (upper) ch = ch.toUpperCase();
+
+      e.preventDefault();
+      const st = input.selectionStart ?? input.value.length;
+      const en = input.selectionEnd ?? input.value.length;
+      input.setRangeText(ch, st, en, 'end');
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    // 모바일 등: 한글이 조합되어 들어온 경우, 조합이 끝나면 영문으로 변환
+    input.addEventListener('compositionend', () => {
+      if (/[ㄱ-ㅎㅏ-ㅣ가-힣]/.test(input.value)) {
+        input.value = convertKorToEng(input.value);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
   }
 
   function processSheet1(rawData) {
@@ -569,7 +603,7 @@
   adminPasswordInput.addEventListener('input', checkCanSubmit);
   monthInput.addEventListener('input', checkCanSubmit);
   adminPasswordInput.addEventListener('keyup', (e) => {
-    if (e.key === 'Enter' && !uploadBtn.disabled) uploadBtn.click();
+    if (e.key === 'Enter' && !e.isComposing && !uploadBtn.disabled) uploadBtn.click();
   });
 
   function handleFileSelect(file) {
@@ -881,7 +915,7 @@
     etcSaveBtn.disabled = etcPasswordInput.value.trim().length === 0;
   });
   etcPasswordInput.addEventListener('keyup', (e) => {
-    if (e.key === 'Enter' && !etcSaveBtn.disabled) etcSaveBtn.click();
+    if (e.key === 'Enter' && !e.isComposing && !etcSaveBtn.disabled) etcSaveBtn.click();
   });
 
   etcSaveBtn.addEventListener('click', async () => {
@@ -937,6 +971,9 @@
       etcSaveBtn.disabled = etcPasswordInput.value.trim().length === 0;
     }
   });
+
+  forceEnglishInput(document.getElementById('adminPassword'));
+  forceEnglishInput(document.getElementById('etcPassword'));
 </script>
 </body>
 </html>
