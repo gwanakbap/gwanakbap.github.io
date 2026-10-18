@@ -518,6 +518,112 @@ function loadMonthData(year, month) {
 // 최초 데이터 로드 (현재 연월)
 loadMonthData(todayYear, todayMonth);
 
+// ───────── 기타 탭 (admin에서 수정: gwanak-on/etcConfig) ─────────
+const VALID_TEAMS = [1, 2, 3, 4];
+const VALID_GROUPS = ['A', 'B'];
+
+// 비상근무 / 긴급지원단 강조 조 검증
+function parseEtcConfig(val) {
+  if (!val || typeof val !== 'object') return null;
+
+  const emergencyTeam = Number(val.emergencyTeam);
+  const supportGroup = val.supportGroup;
+
+  if (!VALID_TEAMS.includes(emergencyTeam)) return null;
+  if (!VALID_GROUPS.includes(supportGroup)) return null;
+
+  return { emergencyTeam, supportGroup };
+}
+
+function applyEtcConfig(cfg) {
+  document.querySelectorAll('.team-box[data-team]').forEach(el => {
+    el.classList.toggle('target-team', !!cfg && Number(el.dataset.team) === cfg.emergencyTeam);
+  });
+
+  document.querySelectorAll('.support-group[data-support]').forEach(el => {
+    el.classList.toggle('target-team', !!cfg && el.dataset.support === cfg.supportGroup);
+  });
+}
+
+// 상황관리요원 순서 검증
+function parseSituationOrder(val) {
+  if (!val || typeof val !== 'object') return null;
+
+  const rawList = Array.isArray(val.list) ? val.list : Object.values(val.list || {});
+  if (rawList.length === 0) return null;
+
+  const list = [];
+  for (const item of rawList) {
+    const name = String(item?.name ?? '').trim();
+    if (!name) return null;                        // 이름 없는 항목이 있으면 전체 무효
+    list.push({ name, date: String(item?.date ?? '').trim() || '-' });
+  }
+
+  const nextTurn = Number(val.nextTurn);
+  if (!Number.isInteger(nextTurn) || nextTurn < 1 || nextTurn > list.length) return null;
+
+  return { list, nextTurn };
+}
+
+function renderSituationOrder(cfg) {
+  const nextBox  = document.getElementById('situation-next-box');
+  const nextLbl  = document.getElementById('situation-next-label');
+  const nextVal  = document.getElementById('situation-next-value');
+  const listBox  = document.getElementById('situation-list-box');
+  const listEl   = document.getElementById('situation-list');
+  const emptyEl  = document.getElementById('situation-empty');
+  if (!nextBox || !nextLbl || !nextVal || !listBox || !listEl || !emptyEl) return;
+
+  listEl.replaceChildren();
+
+  // 정상 값이 없으면 "데이터 없음"만 표시
+  if (!cfg) {
+    nextBox.style.display = 'none';
+    listBox.style.display = 'none';
+    emptyEl.style.display = '';
+    return;
+  }
+
+  nextLbl.textContent = `다음 차례 (${cfg.nextTurn}번)`;
+  nextVal.textContent = cfg.list[cfg.nextTurn - 1].name;
+
+  cfg.list.forEach((item, i) => {
+    const num = i + 1;
+    const li = document.createElement('li');
+    if (num === cfg.nextTurn) li.className = 'highlight';
+
+    const numEl = document.createElement('span');
+    numEl.className = 'list-num';
+    numEl.textContent = num;
+
+    const nameEl = document.createElement('span');
+    nameEl.className = 'list-name';
+    nameEl.textContent = item.name;
+
+    const dateEl = document.createElement('span');
+    dateEl.className = 'list-date';
+    dateEl.textContent = num === cfg.nextTurn ? '다음차례' : item.date;
+
+    li.append(numEl, nameEl, dateEl);
+    listEl.appendChild(li);
+  });
+
+  emptyEl.style.display = 'none';
+  nextBox.style.display = '';
+  listBox.style.display = '';
+}
+
+// etcConfig 하나를 구독해서 두 영역을 각각 검증 후 반영
+onValue(ref(db, 'gwanak-on/etcConfig'), (snapshot) => {
+  const val = snapshot.val();
+  applyEtcConfig(parseEtcConfig(val));
+  renderSituationOrder(parseSituationOrder(val?.situationOrder));
+}, (err) => {
+  console.error('기타 설정 로드 실패:', err);
+  applyEtcConfig(null);
+  renderSituationOrder(null);
+});
+
 function renderCalendar() {
   const grid = document.getElementById('calendar-grid');
   if (!grid) return;

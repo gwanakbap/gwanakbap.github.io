@@ -204,6 +204,82 @@
     .status-msg.success { display: block; background-color: #dcfce7; color: #15803d; }
     .status-msg.error   { display: block; background-color: #fee2e2; color: #b91c1c; }
     .status-msg.loading { display: block; background-color: #e0f2fe; color: #0369a1; }
+
+    /* ── 상황관리요원 편집 UI ── */
+    .sit-hint { font-size: 12px; color: var(--text-sub); line-height: 1.4; }
+
+    .sit-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 6px;
+      border: 1px solid #e2e8f0;
+      border-radius: 6px;
+      background-color: #f8fafc;
+    }
+
+    .sit-row.next {
+      border-color: var(--primary-color);
+      background-color: #eff6ff;
+    }
+
+    .sit-row input[type="radio"] { width: 18px; height: 18px; flex-shrink: 0; }
+
+    .sit-num {
+      min-width: 22px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-sub);
+      text-align: center;
+    }
+
+    .sit-row .sit-input {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 6px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 13px;
+      background-color: #fff;
+      outline: none;
+      user-select: text;
+      -webkit-user-select: text;
+    }
+
+    .sit-row .sit-input:focus { border-color: var(--primary-color); }
+
+    .sit-actions {
+      display: flex;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .sit-btn {
+      width: 24px;
+      height: 26px;
+      padding: 0;
+      border: 1px solid #cbd5e1;
+      border-radius: 5px;
+      background: #fff;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .sit-btn.del { color: #b91c1c; }
+
+    .sit-add {
+      width: 100%;
+      padding: 10px;
+      border: 1px dashed #94a3b8;
+      border-radius: 8px;
+      background: #fff;
+      color: var(--primary-color);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    #etcStatusMsg { white-space: pre-line; }
   </style>
 </head>
 <body>
@@ -215,6 +291,7 @@
   </header>
 
   <main class="main-content">
+    <!-- 카드 1: 엑셀 업로드 -->
     <div class="card">
       <div class="card-title">📁 엑셀 데이터 업로드</div>
       
@@ -240,6 +317,47 @@
       </button>
 
       <div id="statusMsg" class="status-msg"></div>
+    </div>
+
+    <!-- 카드 2: 기타 탭 설정 -->
+    <div class="card" style="margin-top: 16px;">
+      <div class="card-title">📋 기타 탭 설정</div>
+
+      <div class="form-group">
+        <label for="emergencyTeamSelect" class="form-label">🚨 비상근무 편성표 강조 조</label>
+        <select id="emergencyTeamSelect" class="form-input">
+          <option value="1">1조</option>
+          <option value="2">2조</option>
+          <option value="3">3조</option>
+          <option value="4">4조</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="supportGroupSelect" class="form-label">🚒 긴급지원단 강조 조</label>
+        <select id="supportGroupSelect" class="form-input">
+          <option value="A">A조</option>
+          <option value="B">B조</option>
+        </select>
+      </div>
+
+      <details class="form-group">
+        <summary class="form-label" style="cursor:pointer;">📋 상황관리요원 순서 (눌러서 펼치기)</summary>
+        <p class="sit-hint" style="margin-top:6px;">왼쪽 ◉ 를 선택하면 그 사람이 "다음 차례"입니다. 날짜가 없으면 비워 두세요.</p>
+        <div id="situationRows" style="display:flex; flex-direction:column; gap:4px; max-height:55vh; overflow-y:auto; padding-right:2px; margin-top:8px;"></div>
+        <button type="button" id="situationAddBtn" class="sit-add" style="margin-top:8px;">+ 항목 추가</button>
+      </details>
+
+      <div class="form-group" style="margin-bottom: 0;">
+        <label for="etcPassword" class="form-label">🔒 관리자 비밀번호</label>
+        <input type="text" id="etcPassword" class="form-input password-mask" placeholder="비밀번호를 입력하세요" autocomplete="off" />
+      </div>
+
+      <button id="etcSaveBtn" class="btn-primary" disabled>
+        <span>기타 설정 저장하기</span>
+      </button>
+
+      <div id="etcStatusMsg" class="status-msg"></div>
     </div>
   </main>
 </div>
@@ -296,24 +414,85 @@
   }
 
   function processSheet1(rawData) {
-  if (!rawData) return [];
+    if (!rawData) return [];
 
-  const list = Array.isArray(rawData) ? rawData : Object.values(rawData);
-  if (list.length === 0) return [];
+    const list = Array.isArray(rawData) ? rawData : Object.values(rawData);
+    if (list.length === 0) return [];
 
-  return list
-    .filter(item => String(item.dateStr || '').trim() !== '')
-    .map(item => {
+    return list
+      .filter(item => String(item.dateStr || '').trim() !== '')
+      .map(item => {
+        const dateStr = String(item.dateStr || '').trim();
+        const parts = dateStr.split('/');
+
+        // 엑셀에서 읽어온 shiftType 검증 (일직/숙직이 아니면 '당직'으로 기본값 설정)
+        const rawShiftType = String(item.shiftType || '').trim();
+        const shiftType = (rawShiftType === '일직' || rawShiftType === '숙직') ? rawShiftType : '당직';
+
+        return {
+          dateStr: dateStr,
+          day: parts.length > 1 ? parseInt(parts[1], 10) : 0,
+          dayOfWeek: String(item.dayOfWeek || '').trim(),
+          isHoliday: String(item.isHoliday || '').trim() === '공휴일',
+          leaderRank: String(item.leaderRank || '').trim(),
+          leaderName: String(item.leaderName || '').replace(/\s/g, ''),
+          worker1Rank: String(item.worker1Rank || '').trim(),
+          worker1Name: String(item.worker1Name || '').replace(/\s/g, ''),
+          worker2Rank: String(item.worker2Rank || '').trim(),
+          worker2Name: String(item.worker2Name || '').replace(/\s/g, ''),
+          shiftType: shiftType,
+        };
+      });
+  }
+
+  function processSheet2(rawData) {
+    if (!rawData) return {};
+
+    // 1단계: 날짜별 전체 등장 횟수 미리 카운트
+    const dateTotalCountMap = {};
+    rawData.forEach(item => {
       const dateStr = String(item.dateStr || '').trim();
+      if (dateStr) {
+        dateTotalCountMap[dateStr] = (dateTotalCountMap[dateStr] || 0) + 1;
+      }
+    });
+
+    const monthlyGroup = {};
+    const dateCurrentIndexMap = {}; // 날짜별 처리 순번 추적용
+
+    // 2단계: 데이터 가공 및 근무 유형(shiftType) 판별
+    rawData.forEach(item => {
+      const dateStr = String(item.dateStr || '').trim();
+      if (!dateStr) return;
+
       const parts = dateStr.split('/');
+      if (parts.length < 3) return;
 
-      // 엑셀에서 읽어온 shiftType 검증 (일직/숙직이 아니면 '당직'으로 기본값 설정)
-      const rawShiftType = String(item.shiftType || '').trim();
-      const shiftType = (rawShiftType === '일직' || rawShiftType === '숙직') ? rawShiftType : '당직';
+      const month = parts[0].padStart(2, '0');
+      const day = parseInt(parts[1], 10);
+      const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+      const yearMonth = `${year}-${month}`;
 
-      return {
+      if (!monthlyGroup[yearMonth]) {
+        monthlyGroup[yearMonth] = [];
+      }
+
+      // 해당 날짜의 총 개수 및 현재 순번 계산
+      const totalCount = dateTotalCountMap[dateStr] || 1;
+      dateCurrentIndexMap[dateStr] = (dateCurrentIndexMap[dateStr] || 0) + 1;
+      const currentIndex = dateCurrentIndexMap[dateStr];
+
+      // shiftType 결정 조건
+      // 1건만 존재할 경우: '당직'
+      // 2건 이상 존재할 경우: 첫 번째 '일직', 두 번째 '숙직'
+      let shiftType = '당직';
+      if (totalCount >= 2) {
+        shiftType = currentIndex === 1 ? '일직' : '숙직';
+      }
+
+      monthlyGroup[yearMonth].push({
         dateStr: dateStr,
-        day: parts.length > 1 ? parseInt(parts[1], 10) : 0,
+        day: day,
         dayOfWeek: String(item.dayOfWeek || '').trim(),
         isHoliday: String(item.isHoliday || '').trim() === '공휴일',
         leaderRank: String(item.leaderRank || '').trim(),
@@ -323,85 +502,24 @@
         worker2Rank: String(item.worker2Rank || '').trim(),
         worker2Name: String(item.worker2Name || '').replace(/\s/g, ''),
         shiftType: shiftType,
+      });
+    });
+
+    const monthlyData = {};
+    Object.keys(monthlyGroup).forEach(yearMonth => {
+      const monthNum = parseInt(yearMonth.split('-')[1], 10);
+
+      monthlyData[yearMonth] = {
+        list: monthlyGroup[yearMonth],
+        rawHeader: `당직(기본순서) ${monthNum}월`
       };
     });
-}
 
-function processSheet2(rawData) {
-  if (!rawData) return {};
-
-  // 1단계: 날짜별 전체 등장 횟수 미리 카운트
-  const dateTotalCountMap = {};
-  rawData.forEach(item => {
-    const dateStr = String(item.dateStr || '').trim();
-    if (dateStr) {
-      dateTotalCountMap[dateStr] = (dateTotalCountMap[dateStr] || 0) + 1;
-    }
-  });
-
-  const monthlyGroup = {};
-  const dateCurrentIndexMap = {}; // 날짜별 처리 순번 추적용
-
-  // 2단계: 데이터 가공 및 근무 유형(shiftType) 판별
-  rawData.forEach(item => {
-    const dateStr = String(item.dateStr || '').trim();
-    if (!dateStr) return;
-
-    const parts = dateStr.split('/');
-    if (parts.length < 3) return;
-
-    const month = parts[0].padStart(2, '0');
-    const day = parseInt(parts[1], 10);
-    const year = parts[2].length === 2 ? '20' + parts[2] : parts[2];
-    const yearMonth = `${year}-${month}`;
-
-    if (!monthlyGroup[yearMonth]) {
-      monthlyGroup[yearMonth] = [];
-    }
-
-    // 해당 날짜의 총 개수 및 현재 순번 계산
-    const totalCount = dateTotalCountMap[dateStr] || 1;
-    dateCurrentIndexMap[dateStr] = (dateCurrentIndexMap[dateStr] || 0) + 1;
-    const currentIndex = dateCurrentIndexMap[dateStr];
-
-    // shiftType 결정 조건
-    // 1건만 존재할 경우: '당직'
-    // 2건 이상 존재할 경우: 첫 번째 '일직', 두 번째 '숙직'
-    let shiftType = '당직';
-    if (totalCount >= 2) {
-      shiftType = currentIndex === 1 ? '일직' : '숙직';
-    }
-
-    monthlyGroup[yearMonth].push({
-      dateStr: dateStr,
-      day: day,
-      dayOfWeek: String(item.dayOfWeek || '').trim(),
-      isHoliday: String(item.isHoliday || '').trim() === '공휴일',
-      leaderRank: String(item.leaderRank || '').trim(),
-      leaderName: String(item.leaderName || '').replace(/\s/g, ''),
-      worker1Rank: String(item.worker1Rank || '').trim(),
-      worker1Name: String(item.worker1Name || '').replace(/\s/g, ''),
-      worker2Rank: String(item.worker2Rank || '').trim(),
-      worker2Name: String(item.worker2Name || '').replace(/\s/g, ''),
-      shiftType: shiftType,
-    });
-  });
-
-  const monthlyData = {};
-  Object.keys(monthlyGroup).forEach(yearMonth => {
-    const monthNum = parseInt(yearMonth.split('-')[1], 10);
-
-    monthlyData[yearMonth] = {
-      list: monthlyGroup[yearMonth],
-      rawHeader: `당직(기본순서) ${monthNum}월`
-    };
-  });
-
-  return monthlyData;
-}
+    return monthlyData;
+  }
 
   // ─────────────────────────────────────────────────
-  // DOM 요소
+  // DOM 요소 (엑셀 업로드)
   // ─────────────────────────────────────────────────
   const monthInput       = document.getElementById('monthInput');
   const uploadZone       = document.getElementById('uploadZone');
@@ -469,7 +587,7 @@ function processSheet2(rawData) {
   }
 
   // ─────────────────────────────────────────────────
-  // 저장 핸들러
+  // 저장 핸들러 (엑셀 업로드)
   // ─────────────────────────────────────────────────
   uploadBtn.addEventListener('click', async () => {
     const enteredPassword = adminPasswordInput.value.trim();
@@ -605,6 +723,220 @@ function processSheet2(rawData) {
     statusMsg.className = "status-msg " + type;
     statusMsg.innerText = msg;
   }
+
+  // ─────────────────────────────────────────────────
+  // 기타 탭 설정 (비상근무 / 긴급지원단 / 상황관리요원)
+  // ─────────────────────────────────────────────────
+  const emergencyTeamSelect = document.getElementById('emergencyTeamSelect');
+  const supportGroupSelect  = document.getElementById('supportGroupSelect');
+  const situationRowsEl     = document.getElementById('situationRows');
+  const situationAddBtn     = document.getElementById('situationAddBtn');
+  const etcPasswordInput    = document.getElementById('etcPassword');
+  const etcSaveBtn          = document.getElementById('etcSaveBtn');
+  const etcStatusMsg        = document.getElementById('etcStatusMsg');
+
+  function showEtcStatus(msg, type) {
+    etcStatusMsg.className = "status-msg " + type;
+    etcStatusMsg.innerText = msg;
+  }
+
+  // ── 상황관리요원 편집 상태 ──
+  let situationRows = [];   // [{ name, date }]
+  let situationNext = 1;    // 다음 차례 번호 (1부터)
+
+  function renderSituationRows(focusIndex = -1) {
+    situationRowsEl.replaceChildren();
+
+    situationRows.forEach((row, i) => {
+      const num = i + 1;
+      const div = document.createElement('div');
+      div.className = 'sit-row' + (num === situationNext ? ' next' : '');
+
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'situationNext';
+      radio.checked = num === situationNext;
+      radio.addEventListener('change', () => {
+        situationNext = num;
+        renderSituationRows();
+      });
+
+      const numEl = document.createElement('span');
+      numEl.className = 'sit-num';
+      numEl.textContent = num;
+
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.className = 'sit-input';
+      nameInput.placeholder = '이름';
+      nameInput.value = row.name;
+      nameInput.addEventListener('input', () => { row.name = nameInput.value; });
+
+      const dateInput = document.createElement('input');
+      dateInput.type = 'text';
+      dateInput.className = 'sit-input';
+      dateInput.placeholder = '날짜 (예: 2026.07.20.)';
+      dateInput.value = row.date;
+      dateInput.addEventListener('input', () => { row.date = dateInput.value; });
+
+      const actions = document.createElement('div');
+      actions.className = 'sit-actions';
+
+      const makeBtn = (label, cls, onClick, disabled) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'sit-btn ' + cls;
+        b.textContent = label;
+        b.disabled = !!disabled;
+        b.addEventListener('click', onClick);
+        return b;
+      };
+
+      actions.append(
+        makeBtn('▲', '', () => moveSituationRow(i, i - 1), i === 0),
+        makeBtn('▼', '', () => moveSituationRow(i, i + 1), i === situationRows.length - 1),
+        makeBtn('✕', 'del', () => removeSituationRow(i))
+      );
+
+      div.append(radio, numEl, nameInput, dateInput, actions);
+      situationRowsEl.appendChild(div);
+
+      if (i === focusIndex) nameInput.focus();
+    });
+  }
+
+  function moveSituationRow(from, to) {
+    if (to < 0 || to >= situationRows.length) return;
+    [situationRows[from], situationRows[to]] = [situationRows[to], situationRows[from]];
+
+    // "다음 차례"가 같은 사람을 계속 가리키도록 보정
+    if (situationNext === from + 1) situationNext = to + 1;
+    else if (situationNext === to + 1) situationNext = from + 1;
+
+    renderSituationRows();
+  }
+
+  function removeSituationRow(i) {
+    const name = situationRows[i].name.trim() || `${i + 1}번`;
+    if (!confirm(`'${name}' 항목을 삭제할까요?`)) return;
+
+    situationRows.splice(i, 1);
+
+    if (situationNext > i + 1) situationNext -= 1;
+    if (situationNext > situationRows.length) situationNext = situationRows.length;
+    if (situationNext < 1) situationNext = 1;
+
+    renderSituationRows();
+  }
+
+  situationAddBtn.addEventListener('click', () => {
+    situationRows.push({ name: '', date: '' });
+    renderSituationRows(situationRows.length - 1);
+  });
+
+  // 저장 전 검증 및 변환
+  function buildSituationList() {
+    if (situationRows.length === 0) return { error: '상황관리요원 항목이 없습니다.' };
+
+    const list = [];
+    for (let i = 0; i < situationRows.length; i++) {
+      const name = situationRows[i].name.trim();
+      if (!name) return { error: `${i + 1}번 항목의 이름이 비어 있습니다.` };
+      list.push({ name, date: situationRows[i].date.trim() || '-' });
+    }
+    return { list };
+  }
+
+  // ── 현재 저장된 값 불러오기 ──
+  (async () => {
+    try {
+      const etcSnap = await get(ref(db, 'gwanak-on/etcConfig'));
+
+      if (etcSnap.exists()) {
+        const v = etcSnap.val();
+        if (v.emergencyTeam) emergencyTeamSelect.value = String(v.emergencyTeam);
+        if (v.supportGroup)  supportGroupSelect.value  = v.supportGroup;
+
+        const sit = v.situationOrder;
+        if (sit) {
+          const arr = Array.isArray(sit.list) ? sit.list : Object.values(sit.list || {});
+          situationRows = arr.map(it => ({
+            name: String(it?.name ?? ''),
+            date: (it?.date && it.date !== '-') ? String(it.date) : ''
+          }));
+          const n = Number(sit.nextTurn);
+          situationNext = (Number.isInteger(n) && n >= 1 && n <= situationRows.length) ? n : 1;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      showEtcStatus("❌ 현재 설정을 불러오지 못했습니다.", "error");
+    }
+
+    renderSituationRows();
+  })();
+
+  // ── 저장 ──
+  etcPasswordInput.addEventListener('input', () => {
+    etcSaveBtn.disabled = etcPasswordInput.value.trim().length === 0;
+  });
+  etcPasswordInput.addEventListener('keyup', (e) => {
+    if (e.key === 'Enter' && !etcSaveBtn.disabled) etcSaveBtn.click();
+  });
+
+  etcSaveBtn.addEventListener('click', async () => {
+    const entered = etcPasswordInput.value.trim();
+    if (!entered) return;
+
+    const built = buildSituationList();
+    if (built.error) { showEtcStatus("❌ " + built.error, "error"); return; }
+
+    const nextTurn = situationNext;
+    if (nextTurn < 1 || nextTurn > built.list.length) {
+      showEtcStatus("❌ 다음 차례를 선택해 주세요.", "error");
+      return;
+    }
+
+    etcSaveBtn.disabled = true;
+    showEtcStatus("🔑 비밀번호 확인 중...", "loading");
+
+    try {
+      const pwdSnap = await get(ref(db, 'admin/password'));
+      if (!pwdSnap.exists()) {
+        showEtcStatus("❌ 서버에 관리자 비밀번호가 설정되어 있지 않습니다.", "error");
+        return;
+      }
+
+      const realPassword = String(pwdSnap.val());
+      if (entered !== realPassword && convertKorToEng(entered) !== realPassword) {
+        showEtcStatus("❌ 비밀번호가 올바르지 않습니다.", "error");
+        return;
+      }
+
+      const now = new Date().toISOString();
+
+      await set(ref(db, 'gwanak-on/etcConfig'), {
+        emergencyTeam: Number(emergencyTeamSelect.value),
+        supportGroup: supportGroupSelect.value,
+        situationOrder: {
+          nextTurn,
+          list: built.list
+        },
+        updatedAt: now
+      });
+
+      showEtcStatus(
+        `✅ 저장되었습니다.\n비상근무 ${emergencyTeamSelect.value}조 / 긴급지원단 ${supportGroupSelect.value}조\n상황관리요원 ${built.list.length}명, 다음 차례 ${nextTurn}번 ${built.list[nextTurn - 1].name}`,
+        "success"
+      );
+      etcPasswordInput.value = "";
+    } catch (err) {
+      console.error(err);
+      showEtcStatus("❌ 저장에 실패했습니다.", "error");
+    } finally {
+      etcSaveBtn.disabled = etcPasswordInput.value.trim().length === 0;
+    }
+  });
 </script>
 </body>
 </html>
