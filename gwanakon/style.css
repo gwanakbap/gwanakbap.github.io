@@ -566,3 +566,7 @@ header {
     border-radius: 6px;
     border: 1px solid #e2e8f0;
 }
+.day-cell.rot-border {
+  box-shadow: inset 0 0 0 2px var(--rot-color);
+  padding: 3px 4px;
+}

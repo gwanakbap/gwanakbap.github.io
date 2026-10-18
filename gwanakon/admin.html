@@ -41,7 +41,7 @@
 
     #admin-container {
       width: 100%;
-      max-width: 440px;
+      max-width: 1000px;
       min-height: 100vh;
       background-color: var(--bg-color);
       box-shadow: 0 0 20px rgba(0,0,0,0.1);
@@ -77,6 +77,10 @@
     .main-content {
       padding: 16px;
       flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: stretch;   /* 두 카드 높이 동일 */
     }
 
     .card {
@@ -84,7 +88,15 @@
       border-radius: 14px;
       padding: 20px 16px;
       box-shadow: 0 3px 10px rgba(0,0,0,0.04);
+      display: flex;
+      flex-direction: column;
     }
+
+    /* 카드 사이 간격은 그리드 gap으로 처리 */
+    .main-content > .card { margin-top: 0 !important; }
+
+    /* 비밀번호 + 저장 버튼 + 상태 메시지를 묶어 카드 맨 아래에 고정 */
+    .save-area { margin-top: auto; }
 
     .card-title {
       font-size: 15px;
@@ -136,6 +148,8 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      justify-content: center;   /* 세로 가운데 */
+      flex: 1;                   /* 카드의 남는 높이만큼 늘어남 */
       gap: 10px;
       margin-bottom: 16px;
     }
@@ -281,6 +295,12 @@
     }
 
     #etcStatusMsg { white-space: pre-line; }
+
+    /* 좁은 화면(모바일/좁은 창)에서는 다시 한 줄로 */
+    @media (max-width: 820px) {
+      #admin-container { max-width: 440px; }
+      .main-content { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -308,21 +328,23 @@
       </div>
       <input type="file" id="excelFileInput" accept=".xlsx, .xls" />
 
-      <div class="form-group" style="margin-bottom: 0;">
-        <label for="adminPassword" class="form-label">🔒 관리자 비밀번호</label>
-        <input type="password" id="adminPassword" class="form-input" placeholder="비밀번호를 입력하세요" autocomplete="new-password" />
+      <div class="save-area">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="adminPassword" class="form-label">🔒 관리자 비밀번호</label>
+          <input type="password" id="adminPassword" class="form-input" placeholder="비밀번호를 입력하세요" autocomplete="new-password" />
+        </div>
+
+        <button id="uploadBtn" class="btn-primary" disabled>
+          <span>서버에 저장하기</span>
+        </button>
+
+        <div id="statusMsg" class="status-msg"></div>
       </div>
-
-      <button id="uploadBtn" class="btn-primary" disabled>
-        <span>서버에 저장하기</span>
-      </button>
-
-      <div id="statusMsg" class="status-msg"></div>
     </div>
 
-    <!-- 카드 2: 기타 탭 설정 -->
-    <div class="card" style="margin-top: 16px;">
-      <div class="card-title">📋 기타 탭 설정</div>
+    <!-- 카드 2: 기타 설정 -->
+    <div class="card">
+      <div class="card-title">📋 기타 설정</div>
 
       <div class="form-group">
         <label for="emergencyTeamSelect" class="form-label">🚨 비상근무 편성표 강조 조</label>
@@ -349,16 +371,34 @@
         <button type="button" id="situationAddBtn" class="sit-add" style="margin-top:8px;">+ 항목 추가</button>
       </details>
 
-      <div class="form-group" style="margin-bottom: 0;">
-        <label for="etcPassword" class="form-label">🔒 관리자 비밀번호</label>
-        <input type="password" id="etcPassword" class="form-input" placeholder="비밀번호를 입력하세요" autocomplete="new-password" />
+      <div class="form-group">
+        <label class="form-label">🎨 달력 테두리 색 순서 (1 → 2 → 3 순환)</label>
+        <div style="display:flex; gap:10px;">
+          <label style="flex:1; text-align:center; font-size:12px; color:var(--text-sub);">1번째
+            <input type="color" id="calColor0" value="#ef4444" style="width:100%; height:40px; border:none; padding:0; background:none;">
+          </label>
+          <label style="flex:1; text-align:center; font-size:12px; color:var(--text-sub);">2번째
+            <input type="color" id="calColor1" value="#3b82f6" style="width:100%; height:40px; border:none; padding:0; background:none;">
+          </label>
+          <label style="flex:1; text-align:center; font-size:12px; color:var(--text-sub);">3번째
+            <input type="color" id="calColor2" value="#22c55e" style="width:100%; height:40px; border:none; padding:0; background:none;">
+          </label>
+        </div>
+        <p class="sit-hint">날짜 순서대로 1→2→3번째 색이 반복됩니다. 색의 위치를 바꾸면 순서가 바뀝니다.</p>
       </div>
 
-      <button id="etcSaveBtn" class="btn-primary" disabled>
-        <span>기타 설정 저장하기</span>
-      </button>
+      <div class="save-area">
+        <div class="form-group" style="margin-bottom: 0;">
+          <label for="etcPassword" class="form-label">🔒 관리자 비밀번호</label>
+          <input type="password" id="etcPassword" class="form-input" placeholder="비밀번호를 입력하세요" autocomplete="new-password" />
+        </div>
 
-      <div id="etcStatusMsg" class="status-msg"></div>
+        <button id="etcSaveBtn" class="btn-primary" disabled>
+          <span>서버에 저장하기</span>
+        </button>
+
+        <div id="etcStatusMsg" class="status-msg"></div>
+      </div>
     </div>
   </main>
 </div>
@@ -759,7 +799,7 @@
   }
 
   // ─────────────────────────────────────────────────
-  // 기타 탭 설정 (비상근무 / 긴급지원단 / 상황관리요원)
+  // 기타 탭 설정 (비상근무 / 긴급지원단 / 상황관리요원 / 달력 색)
   // ─────────────────────────────────────────────────
   const emergencyTeamSelect = document.getElementById('emergencyTeamSelect');
   const supportGroupSelect  = document.getElementById('supportGroupSelect');
@@ -768,6 +808,7 @@
   const etcPasswordInput    = document.getElementById('etcPassword');
   const etcSaveBtn          = document.getElementById('etcSaveBtn');
   const etcStatusMsg        = document.getElementById('etcStatusMsg');
+  const calColorInputs      = [0, 1, 2].map(i => document.getElementById('calColor' + i));
 
   function showEtcStatus(msg, type) {
     etcStatusMsg.className = "status-msg " + type;
@@ -891,6 +932,12 @@
         if (v.emergencyTeam) emergencyTeamSelect.value = String(v.emergencyTeam);
         if (v.supportGroup)  supportGroupSelect.value  = v.supportGroup;
 
+        if (Array.isArray(v.calendarColors) && v.calendarColors.length === 3) {
+          v.calendarColors.forEach((c, i) => {
+            if (/^#[0-9a-fA-F]{6}$/.test(c)) calColorInputs[i].value = c;
+          });
+        }
+
         const sit = v.situationOrder;
         if (sit) {
           const arr = Array.isArray(sit.list) ? sit.list : Object.values(sit.list || {});
@@ -952,6 +999,7 @@
       await set(ref(db, 'gwanak-on/etcConfig'), {
         emergencyTeam: Number(emergencyTeamSelect.value),
         supportGroup: supportGroupSelect.value,
+        calendarColors: calColorInputs.map(el => el.value),
         situationOrder: {
           nextTurn,
           list: built.list

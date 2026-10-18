@@ -101,6 +101,20 @@ function buildTokenRecord(token) {
   };
 }
 
+const calendarBorderToggle = document.getElementById('calendar-border-toggle');
+const KEY_CAL_BORDER = 'duty_calendar_border_enabled';
+const isBorderOn = () => localStorage.getItem(KEY_CAL_BORDER) !== 'false';   // 기본 켜짐
+
+let rotationColors = null;   // 서버에서 받은 정상 색상 3개, 없으면 null
+
+if (calendarBorderToggle) {
+  calendarBorderToggle.checked = isBorderOn();
+  calendarBorderToggle.addEventListener('change', () => {
+    localStorage.setItem(KEY_CAL_BORDER, String(calendarBorderToggle.checked));
+    renderCalendar();
+  });
+}
+
 if (usernameInput) usernameInput.value = currentUsername;
 
 // 네비게이션 버튼 클릭 이벤트 연결 (0 ~ 3번 탭 일괄 바인딩)
@@ -545,6 +559,13 @@ function applyEtcConfig(cfg) {
   });
 }
 
+function parseRotationColors(val) {
+  const arr = Array.isArray(val) ? val : (val && typeof val === 'object' ? Object.values(val) : null);
+  if (!arr || arr.length !== 3) return null;
+  if (!arr.every(c => typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c))) return null;
+  return arr;
+}
+
 // 상황관리요원 순서 검증
 function parseSituationOrder(val) {
   if (!val || typeof val !== 'object') return null;
@@ -618,10 +639,14 @@ onValue(ref(db, 'gwanak-on/etcConfig'), (snapshot) => {
   const val = snapshot.val();
   applyEtcConfig(parseEtcConfig(val));
   renderSituationOrder(parseSituationOrder(val?.situationOrder));
+  rotationColors = parseRotationColors(val?.calendarColors);
+  renderCalendar();
 }, (err) => {
   console.error('기타 설정 로드 실패:', err);
   applyEtcConfig(null);
   renderSituationOrder(null);
+  rotationColors = null;
+  renderCalendar();
 });
 
 function renderCalendar() {
@@ -645,6 +670,9 @@ function renderCalendar() {
     const emptyDayNum = prevMonthLastDay - firstDayIndex + 1 + i;
     gridHTML += `<div class="day-cell other-month"><span class="day-num">${emptyDayNum}</span></div>`;
   }
+
+  // 테두리 색 순환 사용 여부 (루프 밖에서 한 번만 판단)
+  const useRotation = !!rotationColors && isBorderOn();
 
   for (let day = 1; day <= totalDays; day++) {
     const dayDuties = dutyData.filter(d => d.day === day);
@@ -672,8 +700,17 @@ function renderCalendar() {
       });
     });
 
+    // 날짜별 순환 테두리 색 (1970-01-01 기준 경과 일수 % 3 → 월이 바뀌어도 순환 유지)
+    let rotClass = "";
+    let rotStyle = "";
+    if (useRotation) {
+      const epochDay = Math.floor(Date.UTC(targetYear, targetMonth - 1, day) / 86400000);
+      rotClass = " rot-border";
+      rotStyle = ` style="--rot-color:${rotationColors[epochDay % 3]}"`;
+    }
+
     gridHTML += `
-      <div class="day-cell ${dayClass} ${isToday ? 'today' : ''}" data-day="${day}">
+      <div class="day-cell ${dayClass} ${isToday ? 'today' : ''}${rotClass}" data-day="${day}"${rotStyle}>
         <span class="day-num">${day}</span>
         <div class="duty-list">${dutyBadgesHTML}</div>
       </div>
