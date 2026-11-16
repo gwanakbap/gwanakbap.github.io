@@ -1,6 +1,6 @@
 {
   "meta": {
-    "generatedAt": "2026-11-16T00:52:27.981Z",
+    "generatedAt": "2026-11-16T00:54:44.203Z",
     "teamColor": {
       "빨강": 1,
       "노랑": 2,
@@ -222,7 +222,7 @@
           ]
         },
         "afternoon": {
-          "teamNumber": 2,
+          "teamNumber": 1,
           "items": [
             "중국식계란탕",
             "마파두부덮밥",
@@ -232,7 +232,7 @@
           ]
         },
         "evening": {
-          "teamNumber": 2,
+          "teamNumber": 1,
           "items": [
             "쇠고기우거지국",
             "코다리무조림",
